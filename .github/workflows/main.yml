@@ -1,0 +1,31 @@
+name: Main Workflow
+
+on: [push, workflow_dispatch]
+
+jobs:
+    test:
+        strategy:
+            fail-fast: false
+            matrix:
+                # * test on different operative systems
+                # * test minimal versions: python 3.10 + strict (minimal) requirements from 'requirements.txt'
+                # * test latest versions: python 3:x (latest) + latest requirements (eager) from 'pyproject.toml' (.)
+                os: ["windows-2022", "macos-13", "ubuntu-20.04"]
+                versions: [["3.8.0", "-r requirements.txt"], ["3.x", "--upgrade-strategy eager ."]]
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                python-version: ${{ matrix.versions[0] }}
+            - name: Install Dependencies
+              run: |
+                python -m pip install --upgrade pip
+                pip install --upgrade pytest
+                pip install --upgrade ${{ matrix.versions[1] }}
+            - name: Print Versions
+              run: |
+                python --version
+                pip freeze
+            - name: Run Tests
+              run: pytest -rfP

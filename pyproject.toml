@@ -1,0 +1,29 @@
+# test using "pytest"
+# build using "hatch build"
+# publish using "hatch publish"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = 'project-name'
+version = 'project-version'
+requires-python = '>=3.8'
+dependencies = []
+description = 'project-description'
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [
+    { name = 'Luca Giuliani', email = 'luca.giuliani13@unibo.it' },
+    { name = 'University of Bologna - DISI' }
+]
+maintainers = [
+    { name = 'Luca Giuliani', email = 'luca.giuliani13@unibo.it' }
+]
+license = { file = "LICENSE" }
+
+[tool.hatch.build.targets.wheel]
+packages = ['project-package']
+
+[project.urls]
+Repository = "project-repository"
