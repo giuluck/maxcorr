@@ -1,1 +1,1 @@
-## Template README.md File
+## HGR: A Package for Fairness with Continuous Attributes using the Hirschfeld–Gebelein–Rényi Coefficient
