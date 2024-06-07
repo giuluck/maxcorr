@@ -21,7 +21,7 @@ class TorchBackend(Backend):
 
     def numpy(self, v, dtype=None) -> np.ndarray:
         # noinspection PyUnresolvedReferences
-        return v.numpy(force=True)
+        return v.detach().cpu().numpy()
 
     def stack(self, v: list) -> Any:
         return self._backend.stack(v, dim=1)

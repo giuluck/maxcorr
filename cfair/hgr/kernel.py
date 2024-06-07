@@ -10,39 +10,39 @@ from cfair.backend import Backend
 from cfair.hgr.hgr import HGR
 
 
-@dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None, kw_only=True)
+@dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
 class KernelBasedHGR(HGR):
     """Kernel-based HGR interface."""
 
-    @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None, kw_only=True)
+    @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
     class Result(HGR.Result):
         """Data class representing the results of a KernelBasedHGR computation."""
 
-        alpha: Any = field(kw_only=True)
+        alpha: Any = field()
         """The coefficient vector for the f copula transformation."""
 
-        beta: Any = field(kw_only=True)
+        beta: Any = field()
         """The coefficient vector for the f copula transformation."""
 
-    method: str = field(default='trust-constr', kw_only=True)
+    method: str = field(default='trust-constr')
     """The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'."""
 
-    maxiter: int = field(default=1000, kw_only=True)
+    maxiter: int = field(default=1000)
     """The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize."""
 
-    eps: float = field(default=1e-9, kw_only=True)
+    eps: float = field(default=1e-9)
     """The epsilon value used to avoid division by zero in case of null standard deviation."""
 
-    tol: float = field(default=1e-2, kw_only=True)
+    tol: float = field(default=1e-2)
     """The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize."""
 
-    use_lstsq: bool = field(default=True, kw_only=True)
+    use_lstsq: bool = field(default=True)
     """Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1."""
 
-    delta: float = field(default=1e-2, kw_only=True)
+    delta: float = field(default=1e-2)
     """A delta value used to decide whether two columns are linearly dependent."""
 
-    lasso: float = field(default=0.0, kw_only=True)
+    lasso: float = field(default=0.0)
     """The amount of lasso regularization introduced when computing HGR."""
 
     @staticmethod
@@ -226,14 +226,14 @@ class KernelBasedHGR(HGR):
         )
 
 
-@dataclass(frozen=True, init=True, repr=True, eq=False, unsafe_hash=None, kw_only=True)
+@dataclass(frozen=True, init=True, repr=True, eq=False, unsafe_hash=None)
 class DoubleKernelHGR(KernelBasedHGR):
     """Kernel-based HGR computed by solving a constrained least square problem using a minimization solver."""
 
-    degree_a: int = field(default=3, kw_only=True)
+    degree_a: int = field(default=3)
     """The kernel degree for the first variable."""
 
-    degree_b: int = field(default=3, kw_only=True)
+    degree_b: int = field(default=3)
     """The kernel degree for the second variable."""
 
     def _compute(self, a: np.ndarray, b: np.ndarray) -> KernelBasedHGR.Result:
@@ -242,11 +242,11 @@ class DoubleKernelHGR(KernelBasedHGR):
         return self._kbhgr(a=a, b=b, degree_a=self.degree_a, degree_b=self.degree_b, a0=a0, b0=b0)
 
 
-@dataclass(frozen=True, init=True, repr=True, eq=False, unsafe_hash=None, kw_only=True)
+@dataclass(frozen=True, init=True, repr=True, eq=False, unsafe_hash=None)
 class SingleKernelHGR(KernelBasedHGR):
     """Kernel-based HGR computed using one kernel only for both variables and then taking the maximal correlation."""
 
-    degree: int = field(default=3, kw_only=True)
+    degree: int = field(default=3)
     """The kernel degree for the variables."""
 
     @property

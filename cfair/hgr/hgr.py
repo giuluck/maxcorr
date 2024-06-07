@@ -7,27 +7,27 @@ import numpy as np
 from cfair.backend import NumpyBackend, TorchBackend, Backend
 
 
-@dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None, kw_only=True)
+@dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
 class HGR:
     """Interface for an object that computes the HGR correlation."""
 
-    @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None, kw_only=True)
+    @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
     class Result:
         """Data class representing the results of an HGR computation."""
 
-        a: Any = field(kw_only=True)
+        a: Any = field()
         """The first of the two vectors on which the HGR correlation is computed."""
 
-        b: Any = field(kw_only=True)
+        b: Any = field()
         """The first of the two vectors on which the HGR correlation is computed."""
 
-        correlation: Any = field(kw_only=True)
+        correlation: Any = field()
         """The actual value of the correlation, optionally with gradient information attached."""
 
-        hgr: Any = field(kw_only=True)
+        hgr: Any = field()
         """The HGR instance that generated this result."""
 
-        num_call: int = field(kw_only=True)
+        num_call: int = field()
         """The n-th time at which the HGR instance that generated the result was called."""
 
     class _State:
@@ -38,7 +38,7 @@ class HGR:
             self.last_result: Optional[HGR.Result] = None
             self.num_calls: int = 0
 
-    backend: str = field(kw_only=True, default='numpy')
+    backend: str = field(default='numpy')
     """The type of backend used for HGR computation."""
 
     _state: _State = field(init=False, default_factory=_State)
