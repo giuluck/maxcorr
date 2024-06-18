@@ -114,9 +114,9 @@ class HGR:
         bk = self._state.backend
         assert bk.ndim(a) == bk.ndim(b) == 1, f"Expected vectors with one dimension, got {bk.ndim(a)} and {bk.ndim(b)}"
         assert bk.len(a) == bk.len(b), f"Input vectors must have the same dimension, got {bk.len(a)} != {bk.len(b)}"
+        self._state.num_calls += 1
         res = self._compute(a=a, b=b)
         self._state.last_result = res
-        self._state.num_calls += 1
         return res
 
     @abstractmethod

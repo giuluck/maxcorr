@@ -1,16 +1,19 @@
-from typing import Any
+from typing import Any, Type
 
+import numpy
 import numpy as np
 
 from cfair.backend import Backend
 
 
 class NumpyBackend(Backend):
+
     def __init__(self) -> None:
         super(NumpyBackend, self).__init__(backend=np)
 
-    def comply(self, v) -> bool:
-        return isinstance(v, np.ndarray)
+    @property
+    def type(self) -> Type:
+        return np.ndarray
 
     def cast(self, v, dtype=None) -> Any:
         return np.array(v, dtype=dtype)

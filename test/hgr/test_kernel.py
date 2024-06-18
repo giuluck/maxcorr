@@ -1,16 +1,25 @@
-from cfair.hgr import DoubleKernelHGR, SingleKernelHGR
+from typing import Type
+
+from cfair.backend import Backend
+from cfair.hgr import DoubleKernelHGR, SingleKernelHGR, HGR
 from test.hgr.test_hgr import TestHGR
 
 
 class TestDoubleKernelHGR(TestHGR):
-    def test_errors(self) -> None:
-        return self._test_errors(
-            hgr_fn=lambda backend: DoubleKernelHGR(backend=backend.name)
-        )
+
+    def hgr(self, backend: Backend) -> HGR:
+        return DoubleKernelHGR(backend=backend)
+
+    @property
+    def result_type(self) -> Type:
+        return DoubleKernelHGR.Result
 
 
 class TestSingleKernelHGR(TestHGR):
-    def test_errors(self) -> None:
-        return self._test_errors(
-            hgr_fn=lambda backend: SingleKernelHGR(backend=backend.name)
-        )
+
+    def hgr(self, backend: Backend) -> HGR:
+        return SingleKernelHGR(backend=backend)
+
+    @property
+    def result_type(self) -> Type:
+        return SingleKernelHGR.Result

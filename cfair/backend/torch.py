@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Type
 
 import numpy as np
 
@@ -13,8 +13,9 @@ class TorchBackend(Backend):
         except ModuleNotFoundError:
             raise ModuleNotFoundError("TorchBackend requires 'torch', please install it via 'pip install torch'")
 
-    def comply(self, v) -> bool:
-        return isinstance(v, self._backend.Tensor)
+    @property
+    def type(self) -> Type:
+        return self._backend.Tensor
 
     def cast(self, v, dtype=None) -> Any:
         return self._backend.tensor(v, dtype=dtype)

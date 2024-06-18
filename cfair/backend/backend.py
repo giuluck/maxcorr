@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Tuple, final, Any
+from typing import Tuple, final, Any, Type
 
 import numpy as np
 
@@ -23,7 +23,13 @@ class Backend:
         """An alias for the backend."""
         return self.__class__.__name__.replace('Backend', '').lower()
 
+    @property
     @abstractmethod
+    def type(self) -> Type:
+        """The type of data handled by the backend."""
+        pass
+
+    @final
     def comply(self, v) -> bool:
         """Checks whether a vector complies with the backend (e.g., a numpy array for NumpyBackend).
 
@@ -33,7 +39,7 @@ class Backend:
         :return:
             Whether the vector complies with the backend.
         """
-        pass
+        return isinstance(v, self.type)
 
     @abstractmethod
     def cast(self, v, dtype=None) -> Any:
@@ -64,6 +70,18 @@ class Backend:
             The cast vector.
         """
         pass
+
+    @final
+    def list(self, v) -> list:
+        """Casts the vector to a list.
+
+        :param v:
+            The input vector.
+
+        :return:
+            The cast vector.
+        """
+        return self.numpy(v).tolist()
 
     def zeros(self, length: int, dtype=None) -> Any:
         """Creates a vector of zeros with the given length and dtype.

@@ -1,12 +1,20 @@
+from typing import Any, Type
+
 import numpy as np
 
-from cfair.backend import NumpyBackend
+from cfair.backend import Backend, NumpyBackend
 from test.backend.test_backend import TestBackend
 
 
 class TestNumpyBackend(TestBackend):
-    def test_errors(self) -> None:
-        return self._test_errors(
-            backend=NumpyBackend(),
-            vector_fn=lambda *shape: np.ones(shape)
-        )
+
+    @property
+    def backend(self) -> Backend:
+        return NumpyBackend()
+
+    @property
+    def type(self) -> Type:
+        return np.ndarray
+
+    def cast(self, v: list) -> Any:
+        return np.array(v)

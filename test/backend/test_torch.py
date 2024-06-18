@@ -1,12 +1,20 @@
+from typing import Any, Type
+
 import torch
 
-from cfair.backend import TorchBackend
+from cfair.backend import Backend, TorchBackend
 from test.backend.test_backend import TestBackend
 
 
 class TestTorchBackend(TestBackend):
-    def test_errors(self) -> None:
-        return self._test_errors(
-            backend=TorchBackend(),
-            vector_fn=lambda *shape: torch.ones(shape)
-        )
+
+    @property
+    def backend(self) -> Backend:
+        return TorchBackend()
+
+    @property
+    def type(self) -> Type:
+        return torch.Tensor
+
+    def cast(self, v: list) -> Any:
+        return torch.tensor(v)
