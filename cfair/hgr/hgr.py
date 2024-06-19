@@ -1,13 +1,12 @@
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import numpy as np
 
 from cfair.backend import NumpyBackend, TorchBackend, Backend, TensorflowBackend
 
 
-@dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
 class HGR:
     """Interface for an object that computes the HGR correlation."""
 
@@ -30,39 +29,36 @@ class HGR:
         num_call: int = field()
         """The n-th time at which the HGR instance that generated the result was called."""
 
-    class _State:
-        """Data class representing the internal mutable state of an HGR object."""
-
-        def __init__(self) -> None:
-            self.backend: Optional[Backend] = None
-            self.last_result: Optional[HGR.Result] = None
-            self.num_calls: int = 0
-
-    backend: str = field(default='numpy')
-    """The type of backend used for HGR computation."""
-
-    _state: _State = field(init=False, default_factory=_State)
-    """The internal mutable state of the HGR object."""
-
-    def __post_init__(self) -> None:
-        if self.backend == 'numpy':
-            self._state.backend = NumpyBackend()
-        elif self.backend == 'tensorflow':
-            self._state.backend = TensorflowBackend()
-        elif self.backend == 'torch':
-            self._state.backend = TorchBackend()
+    def __init__(self, backend: Union[str, Backend]) -> None:
+        """
+        :param backend:
+            The backend to use to compute the HGR correlation, or its alias.
+        """
+        if backend == 'numpy':
+            backend = NumpyBackend()
+        elif backend == 'tensorflow':
+            backend = TensorflowBackend()
+        elif backend == 'torch':
+            backend = TorchBackend()
         else:
-            raise AssertionError(f"Unknown backend '{self.backend}'")
+            assert isinstance(backend, Backend), f"Unknown backend '{backend}'"
+        self._backend: Backend = backend
+        self._last_result: Optional[HGR.Result] = None
+        self._num_calls: int = 0
+
+    @property
+    def backend(self) -> Backend:
+        return self._backend
 
     @property
     def last_result(self) -> Optional[Result]:
         """The `Result` instance returned from the last HGR call, or None if no call was performed."""
-        return self._state.last_result
+        return self._last_result
 
     @property
     def num_calls(self) -> int:
         """The number of times that this HGR instance was called."""
-        return self._state.num_calls
+        return self._num_calls
 
     def correlation(self, a, b) -> Any:
         """Computes the HGR correlation.
@@ -89,12 +85,12 @@ class HGR:
         :result:
             A `Result` instance containing the computed correlation together with additional information.
         """
-        bk = self._state.backend
+        bk = self._backend
         assert bk.ndim(a) == bk.ndim(b) == 1, f"Expected vectors with one dimension, got {bk.ndim(a)} and {bk.ndim(b)}"
         assert bk.len(a) == bk.len(b), f"Input vectors must have the same dimension, got {bk.len(a)} != {bk.len(b)}"
-        self._state.num_calls += 1
+        self._num_calls += 1
         res = self._compute(a=a, b=b)
-        self._state.last_result = res
+        self._last_result = res
         return res
 
     @abstractmethod
@@ -102,7 +98,6 @@ class HGR:
         pass
 
 
-@dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
 class KernelHGR(HGR):
     """Interface for an object that computes HGR and provides access to the kernels."""
 
@@ -115,7 +110,7 @@ class KernelHGR(HGR):
         :return:
             The resulting projection.
         """
-        assert self._state.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
+        assert self._last_result is not None, "HGR has not been computed yet, so no kernel can be used."
         return self._f(a=a)
 
     def g(self, b) -> Any:
@@ -127,7 +122,7 @@ class KernelHGR(HGR):
         :return:
             The resulting projection.
         """
-        assert self._state.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
+        assert self._last_result is not None, "HGR has not been computed yet, so no kernel can be used."
         return self._g(b=b)
 
     @abstractmethod

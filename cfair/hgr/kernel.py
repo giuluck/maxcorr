@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import Tuple, Optional, List, Any
+from typing import Tuple, Optional, List, Any, Union
 
 import numpy as np
 import scipy
@@ -10,7 +10,6 @@ from cfair.backend import Backend
 from cfair.hgr.hgr import KernelHGR
 
 
-@dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
 class KernelBasedHGR(KernelHGR):
     """Kernel-based HGR interface."""
 
@@ -24,26 +23,48 @@ class KernelBasedHGR(KernelHGR):
         beta: np.ndarray = field()
         """The coefficient vector for the f copula transformation."""
 
-    method: str = field(default='trust-constr')
-    """The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'."""
+    def __init__(self,
+                 backend: Union[str, Backend],
+                 method: str,
+                 maxiter: int,
+                 eps: float,
+                 tol: float,
+                 use_lstsq: bool,
+                 delta: float,
+                 lasso: float):
+        """
+        :param backend:
+            The backend to use to compute the HGR correlation, or its alias.
 
-    maxiter: int = field(default=1000)
-    """The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize."""
+        :param method:
+            The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
 
-    eps: float = field(default=1e-9)
-    """The epsilon value used to avoid division by zero in case of null standard deviation."""
+        :param maxiter:
+            The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize.
 
-    tol: float = field(default=1e-2)
-    """The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize."""
+        :param eps:
+            The epsilon value used to avoid division by zero in case of null standard deviation.
 
-    use_lstsq: bool = field(default=True)
-    """Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1."""
+        :param tol:
+            The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize.
 
-    delta: float = field(default=1e-2)
-    """A delta value used to decide whether two columns are linearly dependent."""
+        :param use_lstsq:
+            Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1.
 
-    lasso: float = field(default=0.0)
-    """The amount of lasso regularization introduced when computing HGR."""
+        :param delta:
+            A delta value used to decide whether two columns are linearly dependent.
+
+        :param lasso:
+            The amount of lasso regularization introduced when computing HGR.
+        """
+        super(KernelBasedHGR, self).__init__(backend=backend)
+        self._method: str = method
+        self._maxiter: int = maxiter
+        self._eps: float = eps
+        self._tol: float = tol
+        self._use_lstsq: bool = use_lstsq
+        self._delta: float = delta
+        self._lasso: lasso = lasso
 
     @staticmethod
     def kernel(v, degree: int, backend: Backend) -> Any:
@@ -62,17 +83,52 @@ class KernelBasedHGR(KernelHGR):
         """The kernel degree for the second variable."""
         pass
 
+    @property
+    def method(self) -> str:
+        """The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'."""
+        return self._method
+
+    @property
+    def maxiter(self) -> int:
+        """The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize."""
+        return self._maxiter
+
+    @property
+    def eps(self) -> float:
+        """The epsilon value used to avoid division by zero in case of null standard deviation."""
+        return self._eps
+
+    @property
+    def tol(self) -> float:
+        """The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize."""
+        return self._tol
+
+    @property
+    def use_lstsq(self) -> bool:
+        """Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1."""
+        return self._use_lstsq
+
+    @property
+    def delta(self) -> float:
+        """A delta value used to decide whether two columns are linearly dependent."""
+        return self._delta
+
+    @property
+    def lasso(self) -> float:
+        """The amount of lasso regularization introduced when computing HGR."""
+        return self._lasso
+
     def _f(self, a) -> Any:
-        fa = KernelBasedHGR.kernel(a, degree=self.degree_a, backend=self._state.backend)
+        fa = KernelBasedHGR.kernel(a, degree=self.degree_a, backend=self._backend)
         # noinspection PyUnresolvedReferences
         alpha = self._state.backend.cast(self.last_result.alpha)
-        return self._state.backend.matmul(fa, alpha)
+        return self._backend.matmul(fa, alpha)
 
     def _g(self, b) -> Any:
-        gb = KernelBasedHGR.kernel(b, degree=self.degree_b, backend=self._state.backend)
+        gb = KernelBasedHGR.kernel(b, degree=self.degree_b, backend=self._backend)
         # noinspection PyUnresolvedReferences
-        beta = self._state.backend.cast(self.last_result.beta)
-        return self._state.backend.matmul(gb, beta)
+        beta = self._backend.cast(self.last_result.beta)
+        return self._backend.matmul(gb, beta)
 
     def _get_linearly_independent(self, f: np.ndarray, g: np.ndarray) -> Tuple[List[int], List[int]]:
         """Returns the list of indices of those columns that are linearly independent to other ones."""
@@ -112,8 +168,6 @@ class KernelBasedHGR(KernelHGR):
                                    a0: Optional[np.ndarray],
                                    b0: Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """Computes the kernel-based hgr for higher order degrees."""
-        bk = self._state.backend
-        f, g = bk.numpy(f), bk.numpy(g)
         degree_x, degree_y = f.shape[1], g.shape[1]
         # retrieve the indices of the linearly dependent columns and impose a linear constraint so that the respective
         # weight is null for all but the first one (this processing step allow to avoid degenerate cases when the
@@ -147,6 +201,7 @@ class KernelBasedHGR(KernelHGR):
             obj_grad = 2 * fg.T @ diff
             pen_func = np.abs(inp).sum()
             pen_grad = np.sign(inp)
+            # noinspection PyUnresolvedReferences
             return obj_func + self.lasso * pen_func, obj_grad + self.lasso * pen_grad
 
         fun_hess = 2 * fg.T @ fg
@@ -188,7 +243,7 @@ class KernelBasedHGR(KernelHGR):
 
     def _kbhgr(self, a, b, degree_a: int = 1, degree_b: int = 1, a0: Optional = None, b0: Optional = None) -> Result:
         """Computes HGR using numpy as backend and returns the correlation (without alpha and beta)."""
-        backend = self._state.backend
+        backend = self._backend
         # build the kernel matrices
         f = KernelBasedHGR.kernel(a, degree=degree_a, backend=backend)
         g = KernelBasedHGR.kernel(b, degree=degree_b, backend=backend)
@@ -211,7 +266,7 @@ class KernelBasedHGR(KernelHGR):
             fa = backend.standardize(backend.matmul(f, alpha), eps=self.eps)
             alpha = backend.numpy(alpha)
         else:
-            alpha, beta = self._higher_order_coefficients(f=f, g=g, a0=a0, b0=b0)
+            alpha, beta = self._higher_order_coefficients(f=backend.numpy(f), g=backend.numpy(g), a0=a0, b0=b0)
             fa = backend.standardize(backend.matmul(f, backend.cast(alpha, dtype=backend.dtype(f))), eps=self.eps)
             gb = backend.standardize(backend.matmul(g, backend.cast(beta, dtype=backend.dtype(g))), eps=self.eps)
         # return the correlation as the absolute value of the (mean) vector product (since the vectors are standardized)
@@ -227,15 +282,71 @@ class KernelBasedHGR(KernelHGR):
         )
 
 
-@dataclass(frozen=True, init=True, repr=True, eq=False, unsafe_hash=None)
 class DoubleKernelHGR(KernelBasedHGR):
     """Kernel-based HGR computed by solving a constrained least square problem using a minimization solver."""
 
-    degree_a: int = field(default=3)
-    """The kernel degree for the first variable."""
+    def __init__(self,
+                 backend: Union[str, Backend] = 'numpy',
+                 degree_a: int = 3,
+                 degree_b: int = 3,
+                 method: str = 'trust-constr',
+                 maxiter: int = 1000,
+                 eps: float = 1e-9,
+                 tol: float = 1e-2,
+                 use_lstsq: bool = True,
+                 delta: float = 1e-2,
+                 lasso: float = 0.0):
+        """
+        :param backend:
+            The backend to use to compute the HGR correlation, or its alias.
 
-    degree_b: int = field(default=3)
-    """The kernel degree for the second variable."""
+        :param degree_a:
+            The kernel degree for the first variable.
+
+        :param degree_b:
+            The kernel degree for the second variable.
+
+        :param method:
+            The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
+
+        :param maxiter:
+            The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize.
+
+        :param eps:
+            The epsilon value used to avoid division by zero in case of null standard deviation.
+
+        :param tol:
+            The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize.
+
+        :param use_lstsq:
+            Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1.
+
+        :param delta:
+            A delta value used to decide whether two columns are linearly dependent.
+
+        :param lasso:
+            The amount of lasso regularization introduced when computing HGR.
+        """
+        super(DoubleKernelHGR, self).__init__(
+            backend=backend,
+            method=method,
+            maxiter=maxiter,
+            eps=eps,
+            tol=tol,
+            use_lstsq=use_lstsq,
+            delta=delta,
+            lasso=lasso
+        )
+        self._degree_a: int = degree_a
+        self._degree_b: int = degree_b
+
+    @property
+    def degree_a(self) -> int:
+        return self._degree_a
+
+    @property
+    def degree_b(self) -> int:
+        return self._degree_b
 
     def _compute(self, a: np.ndarray, b: np.ndarray) -> KernelBasedHGR.Result:
         # noinspection PyUnresolvedReferences
@@ -243,36 +354,87 @@ class DoubleKernelHGR(KernelBasedHGR):
         return self._kbhgr(a=a, b=b, degree_a=self.degree_a, degree_b=self.degree_b, a0=a0, b0=b0)
 
 
-@dataclass(frozen=True, init=True, repr=True, eq=False, unsafe_hash=None)
 class SingleKernelHGR(KernelBasedHGR):
     """Kernel-based HGR computed using one kernel only for both variables and then taking the maximal correlation."""
 
-    degree: int = field(default=3)
-    """The kernel degree for the variables."""
+    def __init__(self,
+                 backend: Union[str, Backend] = 'numpy',
+                 degree: int = 3,
+                 method: str = 'trust-constr',
+                 maxiter: int = 1000,
+                 eps: float = 1e-9,
+                 tol: float = 1e-2,
+                 use_lstsq: bool = True,
+                 delta: float = 1e-2,
+                 lasso: float = 0.0):
+        """
+        :param backend:
+            The backend to use to compute the HGR correlation, or its alias.
+
+        :param degree:
+            The kernel degree for the variables.
+
+        :param method:
+            The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
+
+        :param maxiter:
+            The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize.
+
+        :param eps:
+            The epsilon value used to avoid division by zero in case of null standard deviation.
+
+        :param tol:
+            The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize.
+
+        :param use_lstsq:
+            Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1.
+
+        :param delta:
+            A delta value used to decide whether two columns are linearly dependent.
+
+        :param lasso:
+            The amount of lasso regularization introduced when computing HGR.
+        """
+        super(SingleKernelHGR, self).__init__(
+            backend=backend,
+            method=method,
+            maxiter=maxiter,
+            eps=eps,
+            tol=tol,
+            use_lstsq=use_lstsq,
+            delta=delta,
+            lasso=lasso
+        )
+        self._degree: int = degree
+
+    @property
+    def degree(self) -> int:
+        """The kernel degree for the variables."""
+        return self._degree
 
     @property
     def degree_a(self) -> int:
-        return self.degree
+        return self._degree
 
     @property
     def degree_b(self) -> int:
-        return self.degree
+        return self._degree
 
     def _compute(self, a: np.ndarray, b: np.ndarray) -> KernelBasedHGR.Result:
-        backend = self._state.backend
+        backend = self._backend
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
-        res_a = self._kbhgr(a=a, b=b, degree_a=self.degree, a0=a0)
-        res_b = self._kbhgr(a=a, b=b, degree_b=self.degree, b0=b0)
+        res_a = self._kbhgr(a=a, b=b, degree_a=self._degree, a0=a0)
+        res_b = self._kbhgr(a=a, b=b, degree_b=self._degree, b0=b0)
         cor_a = res_a.correlation
         cor_b = res_b.correlation
         correlation = backend.maximum(cor_a, cor_b)
         if cor_a > cor_b:
             alpha = res_a.alpha
-            beta = np.concatenate((res_a.beta, np.zeros(self.degree - 1)))
+            beta = np.concatenate((res_a.beta, np.zeros(self._degree - 1)))
         else:
             beta = res_b.beta
-            alpha = np.concatenate((res_b.alpha, np.zeros(self.degree - 1)))
+            alpha = np.concatenate((res_b.alpha, np.zeros(self._degree - 1)))
         return KernelBasedHGR.Result(
             a=a,
             b=b,
