@@ -47,6 +47,7 @@ class TestBackend(unittest.TestCase):
         ref, _ = self.vectors()
         vec = self.backend.cast(v=ref)
         self.assertIsInstance(vec, self.type, msg="Cast method should return vector of correct type")
+        self.assertTrue(np.allclose(ref, self.backend.numpy(vec)), msg="Cast method should return correct values")
 
     @final
     def test_numpy(self) -> None:
@@ -61,6 +62,13 @@ class TestBackend(unittest.TestCase):
         vec = self.backend.list(v=vec)
         self.assertIsInstance(vec, list, msg="List method should return a list")
         self.assertEqual(vec, ref, msg="List method should return correct values")
+
+    @final
+    def test_vector(self) -> None:
+        ref, _ = self.vectors()
+        vec = self.backend.vector(v=ref)
+        self.assertIsInstance(vec, self.type, msg="Vector method should return vector of correct type")
+        self.assertTrue(np.allclose(ref, self.backend.numpy(vec)), msg="Vector method should return correct values")
 
     @final
     def test_zeros(self) -> None:

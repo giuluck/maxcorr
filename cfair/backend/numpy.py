@@ -1,6 +1,5 @@
 from typing import Any, Type
 
-import numpy
 import numpy as np
 
 from cfair.backend import Backend
@@ -16,13 +15,19 @@ class NumpyBackend(Backend):
         return np.ndarray
 
     def cast(self, v, dtype=None) -> Any:
-        return np.array(v, dtype=dtype)
+        return self._backend.array(v, dtype=dtype)
 
     def numpy(self, v, dtype=None) -> np.ndarray:
         return v
 
     def stack(self, v: list) -> Any:
         return self._backend.stack(v, axis=1)
+
+    def matmul(self, v, w) -> Any:
+        return self._backend.matmul(v, w)
+
+    def mean(self, v) -> Any:
+        return self._backend.mean(v)
 
     def var(self, v) -> Any:
         return self._backend.var(v, ddof=0)

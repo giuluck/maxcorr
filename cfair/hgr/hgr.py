@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from cfair.backend import NumpyBackend, TorchBackend, Backend
+from cfair.backend import NumpyBackend, TorchBackend, Backend, TensorflowBackend
 
 
 @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
@@ -47,6 +47,8 @@ class HGR:
     def __post_init__(self) -> None:
         if self.backend == 'numpy':
             self._state.backend = NumpyBackend()
+        elif self.backend == 'tensorflow':
+            self._state.backend = TensorflowBackend()
         elif self.backend == 'torch':
             self._state.backend = TorchBackend()
         else:
@@ -61,30 +63,6 @@ class HGR:
     def num_calls(self) -> int:
         """The number of times that this HGR instance was called."""
         return self._state.num_calls
-
-    def f(self, a) -> Any:
-        """Returns the mapped vector f(a) using the kernel function f computed in the last execution.
-
-        :param a:
-            The vector to be projected.
-
-        :return:
-            The resulting projection.
-        """
-        assert self._state.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
-        return self._f(a=a)
-
-    def g(self, b) -> Any:
-        """Returns the mapped vector g(b) using the kernel function g computed in the last execution.
-
-        :param b:
-            The vector to be projected.
-
-        :return:
-            The resulting projection.
-        """
-        assert self._state.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
-        return self._g(b=b)
 
     def correlation(self, a, b) -> Any:
         """Computes the HGR correlation.
@@ -122,6 +100,35 @@ class HGR:
     @abstractmethod
     def _compute(self, a: np.ndarray, b: np.ndarray) -> Result:
         pass
+
+
+@dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
+class KernelHGR(HGR):
+    """Interface for an object that computes HGR and provides access to the kernels."""
+
+    def f(self, a) -> Any:
+        """Returns the mapped vector f(a) using the kernel function f computed in the last execution.
+
+        :param a:
+            The vector to be projected.
+
+        :return:
+            The resulting projection.
+        """
+        assert self._state.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
+        return self._f(a=a)
+
+    def g(self, b) -> Any:
+        """Returns the mapped vector g(b) using the kernel function g computed in the last execution.
+
+        :param b:
+            The vector to be projected.
+
+        :return:
+            The resulting projection.
+        """
+        assert self._state.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
+        return self._g(b=b)
 
     @abstractmethod
     def _f(self, a) -> Any:

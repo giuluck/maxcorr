@@ -7,21 +7,21 @@ import scipy
 from scipy.optimize import NonlinearConstraint, minimize
 
 from cfair.backend import Backend
-from cfair.hgr.hgr import HGR
+from cfair.hgr.hgr import KernelHGR
 
 
 @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
-class KernelBasedHGR(HGR):
+class KernelBasedHGR(KernelHGR):
     """Kernel-based HGR interface."""
 
     @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
-    class Result(HGR.Result):
+    class Result(KernelHGR.Result):
         """Data class representing the results of a KernelBasedHGR computation."""
 
-        alpha: Any = field()
+        alpha: np.ndarray = field()
         """The coefficient vector for the f copula transformation."""
 
-        beta: Any = field()
+        beta: np.ndarray = field()
         """The coefficient vector for the f copula transformation."""
 
     method: str = field(default='trust-constr')
@@ -65,12 +65,14 @@ class KernelBasedHGR(HGR):
     def _f(self, a) -> Any:
         fa = KernelBasedHGR.kernel(a, degree=self.degree_a, backend=self._state.backend)
         # noinspection PyUnresolvedReferences
-        return self._state.backend.matmul(fa, self.last_result.alpha)
+        alpha = self._state.backend.cast(self.last_result.alpha)
+        return self._state.backend.matmul(fa, alpha)
 
     def _g(self, b) -> Any:
         gb = KernelBasedHGR.kernel(b, degree=self.degree_b, backend=self._state.backend)
         # noinspection PyUnresolvedReferences
-        return self._state.backend.matmul(gb, self.last_result.beta)
+        beta = self._state.backend.cast(self.last_result.beta)
+        return self._state.backend.matmul(gb, beta)
 
     def _get_linearly_independent(self, f: np.ndarray, g: np.ndarray) -> Tuple[List[int], List[int]]:
         """Returns the list of indices of those columns that are linearly independent to other ones."""
@@ -164,8 +166,8 @@ class KernelBasedHGR(HGR):
             ub=1
         )
         # if no guess is provided, set the initial point as [ 1 / std(F @ 1) | 1 / std(G @ 1) ] then solve the problem
-        a0 = np.ones(dx) / np.sqrt(f_slim.sum(axis=1).var(ddof=0) + self.eps) if a0 is None else bk.numpy(a0[f_indices])
-        b0 = np.ones(dy) / np.sqrt(g_slim.sum(axis=1).var(ddof=0) + self.eps) if b0 is None else bk.numpy(b0[g_indices])
+        a0 = np.ones(dx) / np.sqrt(f_slim.sum(axis=1).var(ddof=0) + self.eps) if a0 is None else a0[f_indices]
+        b0 = np.ones(dy) / np.sqrt(g_slim.sum(axis=1).var(ddof=0) + self.eps) if b0 is None else b0[g_indices]
         x0 = np.concatenate((a0, b0))
         s = minimize(
             _fun,
@@ -194,8 +196,7 @@ class KernelBasedHGR(HGR):
         #  - if both degrees are 1, simply compute the projected vectors as standardized original vectors
         #  - if one degree is 1, standardize that vector and compute the other's coefficients using lstsq
         #  - if no degree is 1, use the optimization routine and compute the projected vectors from the coefficients
-        alpha = backend.ones(1, dtype=backend.dtype(f))
-        beta = backend.ones(1, dtype=backend.dtype(g))
+        alpha, beta = np.ones(1), np.ones(1)
         if degree_a == 1 and degree_b == 1:
             fa = backend.standardize(a, eps=self.eps)
             gb = backend.standardize(b, eps=self.eps)
@@ -203,16 +204,16 @@ class KernelBasedHGR(HGR):
             fa = backend.standardize(a, eps=self.eps)
             beta = backend.lstsq(g, fa)
             gb = backend.standardize(backend.matmul(g, beta), eps=self.eps)
+            beta = backend.numpy(beta)
         elif degree_b == 1 and self.use_lstsq:
             gb = backend.standardize(b, eps=self.eps)
             alpha = backend.lstsq(f, gb)
             fa = backend.standardize(backend.matmul(f, alpha), eps=self.eps)
+            alpha = backend.numpy(alpha)
         else:
             alpha, beta = self._higher_order_coefficients(f=f, g=g, a0=a0, b0=b0)
-            alpha = backend.cast(alpha, dtype=backend.dtype(f))
-            beta = backend.cast(beta, dtype=backend.dtype(g))
-            fa = backend.standardize(backend.matmul(f, alpha), eps=self.eps)
-            gb = backend.standardize(backend.matmul(g, beta), eps=self.eps)
+            fa = backend.standardize(backend.matmul(f, backend.cast(alpha, dtype=backend.dtype(f))), eps=self.eps)
+            gb = backend.standardize(backend.matmul(g, backend.cast(beta, dtype=backend.dtype(g))), eps=self.eps)
         # return the correlation as the absolute value of the (mean) vector product (since the vectors are standardized)
         correlation = backend.abs(backend.matmul(fa, gb) / backend.len(fa))
         return KernelBasedHGR.Result(
@@ -268,12 +269,10 @@ class SingleKernelHGR(KernelBasedHGR):
         correlation = backend.maximum(cor_a, cor_b)
         if cor_a > cor_b:
             alpha = res_a.alpha
-            beta = backend.zeros(self.degree, dtype=backend.dtype(b))
-            beta[0] = res_a.beta[0]
+            beta = np.concatenate((res_a.beta, np.zeros(self.degree - 1)))
         else:
             beta = res_b.beta
-            alpha = backend.zeros(self.degree, dtype=backend.dtype(a))
-            alpha[0] = res_b.alpha[0]
+            alpha = np.concatenate((res_b.alpha, np.zeros(self.degree - 1)))
         return KernelBasedHGR.Result(
             a=a,
             b=b,

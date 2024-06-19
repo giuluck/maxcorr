@@ -1,11 +1,11 @@
 import unittest
 from abc import abstractmethod
-from typing import final, Type
+from typing import final, Type, List
 
 import numpy as np
 import pytest
 
-from cfair.backend import Backend, backends
+from cfair.backend import Backend, NumpyBackend, TensorflowBackend, TorchBackend
 from cfair.hgr.hgr import HGR
 
 
@@ -13,6 +13,8 @@ class TestHGR(unittest.TestCase):
     RUNS: int = 5
 
     LENGTH: int = 10
+
+    BACKENDS: List[Backend] = [NumpyBackend(), TensorflowBackend(), TorchBackend()]
 
     # noinspection PyUnusedLocal
     @abstractmethod
@@ -30,7 +32,7 @@ class TestHGR(unittest.TestCase):
     @final
     def test_correlation(self) -> None:
         # perform a simple sanity check on the stored result
-        for backend in backends.values():
+        for backend in self.BACKENDS:
             vec1, vec2 = self.vectors(0, 1, backend=backend)
             hgr = self.hgr(backend=backend.name)
             self.assertEqual(
@@ -41,7 +43,7 @@ class TestHGR(unittest.TestCase):
 
     @final
     def test_result(self) -> None:
-        for backend in backends.values():
+        for backend in self.BACKENDS:
             vec1, vec2 = self.vectors(0, 1, backend=backend)
             hgr = self.hgr(backend=backend.name)
             result = hgr(a=vec1, b=vec2)
@@ -67,7 +69,7 @@ class TestHGR(unittest.TestCase):
 
     @final
     def test_state(self) -> None:
-        for backend in backends.values():
+        for backend in self.BACKENDS:
             hgr = self.hgr(backend=backend.name)
             self.assertIsNone(hgr.last_result, msg=f"Wrong initial last result for HGR on {backend}")
             self.assertEqual(hgr.num_calls, 0, msg=f"Wrong initial number of calls stored in HGR on {backend}")

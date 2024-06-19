@@ -27,6 +27,12 @@ class TorchBackend(Backend):
     def stack(self, v: list) -> Any:
         return self._backend.stack(v, dim=1)
 
+    def matmul(self, v, w) -> Any:
+        return self._backend.matmul(v, w)
+
+    def mean(self, v) -> Any:
+        return self._backend.mean(v)
+
     def var(self, v) -> Any:
         return self._backend.var(v, unbiased=False)
 

@@ -83,6 +83,22 @@ class Backend:
         """
         return self.numpy(v).tolist()
 
+    @final
+    def vector(self, v: list, dtype=None) -> Any:
+        """Creates a vector from an input list.
+
+        :param v:
+            The input values.
+
+        :param dtype:
+            The dtype of the vector.
+
+        :return:
+            The output vector.
+        """
+        return self.cast(v, dtype=dtype)
+
+    @final
     def zeros(self, length: int, dtype=None) -> Any:
         """Creates a vector of zeros with the given length and dtype.
 
@@ -95,8 +111,9 @@ class Backend:
         :return:
             The output vector.
         """
-        return self._backend.zeros(length, dtype=dtype)
+        return self.vector([0] * length, dtype=dtype)
 
+    @final
     def ones(self, length: int, dtype=None) -> Any:
         """Creates a vector of ones with the given length and dtype.
 
@@ -109,7 +126,7 @@ class Backend:
         :return:
             The output vector.
         """
-        return self._backend.ones(length, dtype=dtype)
+        return self.vector([1] * length, dtype=dtype)
 
     # noinspection PyUnresolvedReferences, PyMethodMayBeStatic
     def dtype(self, v) -> Any:
@@ -204,6 +221,7 @@ class Backend:
         """
         return self._backend.sqrt(v)
 
+    @abstractmethod
     def matmul(self, v, w) -> Any:
         """Computes the matrix multiplication between two vectors/matrices.
 
@@ -216,7 +234,7 @@ class Backend:
         :return:
             The vector product <v, w>.
         """
-        return self._backend.matmul(v, w)
+        pass
 
     def maximum(self, v, w) -> Any:
         """Computes the element-wise maximum between two vectors.
@@ -232,6 +250,7 @@ class Backend:
         """
         return self._backend.maximum(v, w)
 
+    @abstractmethod
     def mean(self, v) -> Any:
         """Computes the mean of the vector.
 
@@ -241,7 +260,7 @@ class Backend:
         :return:
             The mean of the vector.
         """
-        return self._backend.mean(v)
+        pass
 
     @abstractmethod
     def var(self, v) -> Any:
