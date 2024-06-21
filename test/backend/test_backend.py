@@ -88,8 +88,18 @@ class TestBackend(unittest.TestCase):
         self.assertEqual(self.backend.dtype(vec), vec.dtype, msg="Dtype method should return the correct dtype")
 
     @final
+    def test_reshape(self) -> None:
+        ref, vec = self.vectors(shape=10)
+        ref = np.reshape(ref, (5, 2)).tolist()
+        vec = self.backend.reshape(vec, shape=(-1, 2))
+        self.assertEqual(self.backend.shape(vec), (5, 2), msg="Reshape method should return the correct shape")
+        self.assertEqual(self.backend.list(vec), ref, msg="Reshape method should return correct values")
+
+    @final
     def test_shape(self) -> None:
-        ref, vec = self.vectors()
+        ref, vec = self.vectors(shape=10)
+        self.assertEqual(self.backend.shape(vec), np.shape(ref), msg="Shape method should return the correct shape")
+        ref, vec = self.vectors(shape=(5, 2))
         self.assertEqual(self.backend.shape(vec), np.shape(ref), msg="Shape method should return the correct shape")
 
     @final

@@ -14,20 +14,25 @@ class TestHGR(unittest.TestCase):
 
     LENGTH: int = 10
 
-    BACKENDS: List[Backend] = [NumpyBackend(), TensorflowBackend(), TorchBackend()]
-
-    # noinspection PyUnusedLocal
-    @abstractmethod
-    def hgr(self, backend: Backend) -> HGR:
-        pytest.skip(reason="Abstract Test Class")
+    BACKENDS: List[Backend] = [TensorflowBackend(), TorchBackend(), NumpyBackend()]
 
     @property
     @abstractmethod
-    def result_type(self) -> Type:
+    def hgr_type(self) -> Type[HGR]:
         pytest.skip(reason="Abstract Test Class")
 
-    def vectors(self, *seeds: int, backend: Backend) -> tuple:
-        return [backend.cast(v=np.random.default_rng(seed=s).normal(size=self.LENGTH)) for s in seeds]
+    @final
+    @property
+    def result_type(self) -> Type:
+        return self.hgr_type.Result
+
+    @final
+    def hgr(self, backend: Backend) -> HGR:
+        return self.hgr_type(backend=backend)
+
+    @final
+    def vectors(self, *seeds: int, backend: Backend) -> list:
+        return [backend.cast(v=np.random.default_rng(seed=s).normal(size=self.LENGTH), dtype=float) for s in seeds]
 
     @final
     def test_correlation(self) -> None:
@@ -37,7 +42,7 @@ class TestHGR(unittest.TestCase):
             hgr = self.hgr(backend=backend.name)
             self.assertEqual(
                 hgr.correlation(a=vec1, b=vec2),
-                hgr(a=vec1, b=vec2).correlation,
+                hgr.last_result.correlation,
                 msg=f"Inconsistent correlation between HGR method and result instance on {backend}"
             )
 
@@ -48,6 +53,7 @@ class TestHGR(unittest.TestCase):
             hgr = self.hgr(backend=backend.name)
             result = hgr(a=vec1, b=vec2)
             self.assertIsInstance(result, self.result_type, msg=f"Wrong result class type from HGR call on {backend}")
+            self.assertEqual(result, hgr.last_result, msg=f"Wrong result stored or yielded from HGR call on {backend}")
             self.assertEqual(
                 backend.numpy(vec1).tolist(),
                 backend.numpy(result.a).tolist(),

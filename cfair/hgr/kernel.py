@@ -7,14 +7,14 @@ import scipy
 from scipy.optimize import NonlinearConstraint, minimize
 
 from cfair.backend import Backend
-from cfair.hgr.hgr import KernelHGR
+from cfair.hgr.hgr import HGR
 
 
-class KernelBasedHGR(KernelHGR):
+class KernelBasedHGR(HGR):
     """Kernel-based HGR interface."""
 
     @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
-    class Result(KernelHGR.Result):
+    class Result(HGR.Result):
         """Data class representing the results of a KernelBasedHGR computation."""
 
         alpha: np.ndarray = field()
@@ -66,11 +66,6 @@ class KernelBasedHGR(KernelHGR):
         self._delta: float = delta
         self._lasso: lasso = lasso
 
-    @staticmethod
-    def kernel(v, degree: int, backend: Backend) -> Any:
-        """Computes the kernel of the given vector with the given degree and using either numpy or torch as backend."""
-        return backend.stack([v ** d - backend.mean(v ** d) for d in np.arange(degree) + 1])
-
     @property
     @abstractmethod
     def degree_a(self) -> int:
@@ -119,16 +114,16 @@ class KernelBasedHGR(KernelHGR):
         return self._lasso
 
     def _f(self, a) -> Any:
-        fa = KernelBasedHGR.kernel(a, degree=self.degree_a, backend=self._backend)
+        fa = self.backend.stack([a ** d - self.backend.mean(a ** d) for d in np.arange(self.degree_a) + 1])
         # noinspection PyUnresolvedReferences
-        alpha = self._state.backend.cast(self.last_result.alpha)
-        return self._backend.matmul(fa, alpha)
+        alpha = self.backend.cast(self.last_result.alpha)
+        return self.backend.matmul(fa, alpha)
 
     def _g(self, b) -> Any:
-        gb = KernelBasedHGR.kernel(b, degree=self.degree_b, backend=self._backend)
+        gb = self.backend.stack([b ** d - self.backend.mean(b ** d) for d in np.arange(self.degree_b) + 1])
         # noinspection PyUnresolvedReferences
-        beta = self._backend.cast(self.last_result.beta)
-        return self._backend.matmul(gb, beta)
+        beta = self.backend.cast(self.last_result.beta)
+        return self.backend.matmul(gb, beta)
 
     def _get_linearly_independent(self, f: np.ndarray, g: np.ndarray) -> Tuple[List[int], List[int]]:
         """Returns the list of indices of those columns that are linearly independent to other ones."""
@@ -243,10 +238,10 @@ class KernelBasedHGR(KernelHGR):
 
     def _kbhgr(self, a, b, degree_a: int = 1, degree_b: int = 1, a0: Optional = None, b0: Optional = None) -> Result:
         """Computes HGR using numpy as backend and returns the correlation (without alpha and beta)."""
-        backend = self._backend
+        backend = self.backend
         # build the kernel matrices
-        f = KernelBasedHGR.kernel(a, degree=degree_a, backend=backend)
-        g = KernelBasedHGR.kernel(b, degree=degree_b, backend=backend)
+        f = backend.stack([a ** d - backend.mean(a ** d) for d in np.arange(self.degree_a) + 1])
+        g = backend.stack([b ** d - backend.mean(b ** d) for d in np.arange(self.degree_b) + 1])
         # handle trivial or simpler cases:
         #  - if both degrees are 1, simply compute the projected vectors as standardized original vectors
         #  - if one degree is 1, standardize that vector and compute the other's coefficients using lstsq
@@ -348,7 +343,7 @@ class DoubleKernelHGR(KernelBasedHGR):
     def degree_b(self) -> int:
         return self._degree_b
 
-    def _compute(self, a: np.ndarray, b: np.ndarray) -> KernelBasedHGR.Result:
+    def _compute(self, a, b) -> KernelBasedHGR.Result:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
         return self._kbhgr(a=a, b=b, degree_a=self.degree_a, degree_b=self.degree_b, a0=a0, b0=b0)
@@ -420,21 +415,21 @@ class SingleKernelHGR(KernelBasedHGR):
     def degree_b(self) -> int:
         return self._degree
 
-    def _compute(self, a: np.ndarray, b: np.ndarray) -> KernelBasedHGR.Result:
-        backend = self._backend
+    def _compute(self, a, b) -> KernelBasedHGR.Result:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
-        res_a = self._kbhgr(a=a, b=b, degree_a=self._degree, a0=a0)
-        res_b = self._kbhgr(a=a, b=b, degree_b=self._degree, b0=b0)
+        res_a = self._kbhgr(a=a, b=b, degree_a=self.degree, a0=a0)
+        res_b = self._kbhgr(a=a, b=b, degree_b=self.degree, b0=b0)
         cor_a = res_a.correlation
         cor_b = res_b.correlation
-        correlation = backend.maximum(cor_a, cor_b)
         if cor_a > cor_b:
+            correlation = cor_a
             alpha = res_a.alpha
-            beta = np.concatenate((res_a.beta, np.zeros(self._degree - 1)))
+            beta = np.concatenate((res_a.beta, np.zeros(self.degree - 1)))
         else:
+            correlation = cor_b
             beta = res_b.beta
-            alpha = np.concatenate((res_b.alpha, np.zeros(self._degree - 1)))
+            alpha = np.concatenate((res_b.alpha, np.zeros(self.degree - 1)))
         return KernelBasedHGR.Result(
             a=a,
             b=b,

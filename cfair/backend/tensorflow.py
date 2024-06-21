@@ -1,3 +1,4 @@
+import importlib.util
 from typing import Any, Type
 
 import numpy as np
@@ -6,14 +7,13 @@ from cfair.backend import Backend
 
 
 class TensorflowBackend(Backend):
-    def __init__(self) -> None:
-        try:
-            import tensorflow
-            super(TensorflowBackend, self).__init__(backend=tensorflow)
-        except ModuleNotFoundError:
+    def __init__(self):
+        if importlib.util.find_spec('tensorflow') is None:
             raise ModuleNotFoundError(
                 "TensorflowBackend requires 'tensorflow', please install it via 'pip install tensorflow'"
             )
+        import tensorflow
+        super(TensorflowBackend, self).__init__(backend=tensorflow)
 
     @property
     def type(self) -> Type:
@@ -30,10 +30,10 @@ class TensorflowBackend(Backend):
         return self._backend.stack(v, axis=1)
 
     def matmul(self, v, w) -> Any:
-        v = self._backend.reshape(v, (1, -1)) if self.ndim(v) == 1 else v
-        w = self._backend.reshape(w, (-1, 1)) if self.ndim(w) == 1 else w
+        v = self.reshape(v, shape=(1, -1)) if self.ndim(v) == 1 else v
+        w = self.reshape(w, shape=(-1, 1)) if self.ndim(w) == 1 else w
         s = self._backend.linalg.matmul(v, w)
-        return self._backend.reshape(s, -1)
+        return self.reshape(s, shape=-1)
 
     def mean(self, v) -> Any:
         return self._backend.math.reduce_mean(v)
@@ -43,6 +43,6 @@ class TensorflowBackend(Backend):
 
     def lstsq(self, a, b) -> Any:
         # use fast=False to obtain more robust results
-        b = self._backend.reshape(b, (-1, 1))
+        b = self.reshape(b, shape=(-1, 1))
         w = self._backend.linalg.lstsq(a, b, fast=False)
-        return self._backend.reshape(w, -1)
+        return self.reshape(w, shape=-1)

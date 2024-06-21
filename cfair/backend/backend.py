@@ -1,14 +1,21 @@
 from abc import abstractmethod
-from typing import Tuple, final, Any, Type
+from typing import Tuple, final, Any, Type, Iterable, Union, Optional
 
 import numpy as np
 
 
 class Backend:
-    """A stateless object representing a backend for vector operations. Apart from 'comply' and 'cast', all other
+    """A singleton object representing a backend for vector operations. Apart from 'comply' and 'cast', all other
     functions expect inputs of a compliant type."""
 
-    def __init__(self, backend) -> None:
+    _instance: Optional = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(Backend, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
+
+    def __init__(self, backend):
         """
         :param backend:
             The module representing the backend to use.
@@ -17,6 +24,9 @@ class Backend:
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
+
+    def __eq__(self, other) -> bool:
+        return self is other
 
     @property
     def name(self) -> str:
@@ -139,6 +149,20 @@ class Backend:
             The type of the vector.
         """
         return v.dtype
+
+    def reshape(self, v, shape: Union[int, Iterable[int]]) -> Any:
+        """Reshapes the vector to the given shape.
+
+        :param v:
+            The input vector.
+
+        :param shape:
+            The expected shape of the output vector
+
+        :return:
+            The reshaped vector.
+        """
+        return self._backend.reshape(v, shape)
 
     # noinspection PyMethodMayBeStatic
     def shape(self, v) -> Tuple[int, ...]:

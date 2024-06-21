@@ -1,4 +1,4 @@
-from typing import Any, Type
+from typing import Any, Type, Optional
 
 import numpy as np
 
@@ -7,7 +7,14 @@ from cfair.backend import Backend
 
 class NumpyBackend(Backend):
 
-    def __init__(self) -> None:
+    _instance: Optional = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Backend, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
         super(NumpyBackend, self).__init__(backend=np)
 
     @property
@@ -15,7 +22,11 @@ class NumpyBackend(Backend):
         return np.ndarray
 
     def cast(self, v, dtype=None) -> Any:
-        return self._backend.array(v, dtype=dtype)
+        # TODO: quick fix to handle cast of torch tensors with gradients
+        try:
+            return self._backend.array(v, dtype=dtype)
+        except RuntimeError:
+            return v.detach().cpu().numpy()
 
     def numpy(self, v, dtype=None) -> np.ndarray:
         return v

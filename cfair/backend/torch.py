@@ -1,3 +1,4 @@
+import importlib.util
 from typing import Any, Type
 
 import numpy as np
@@ -6,19 +7,19 @@ from cfair.backend import Backend
 
 
 class TorchBackend(Backend):
-    def __init__(self) -> None:
-        try:
-            import torch
-            super(TorchBackend, self).__init__(backend=torch)
-        except ModuleNotFoundError:
+    def __init__(self):
+        if importlib.util.find_spec('torch') is None:
             raise ModuleNotFoundError("TorchBackend requires 'torch', please install it via 'pip install torch'")
+        import torch
+        super(TorchBackend, self).__init__(backend=torch)
 
     @property
     def type(self) -> Type:
         return self._backend.Tensor
 
     def cast(self, v, dtype=None) -> Any:
-        return self._backend.tensor(v, dtype=dtype)
+        # torch uses 'torch.float64' as default type for 'float', use 'torch.float32' instead for compatibility
+        return self._backend.tensor(v, dtype=self._backend.float32 if dtype is float else dtype)
 
     def numpy(self, v, dtype=None) -> np.ndarray:
         # noinspection PyUnresolvedReferences
