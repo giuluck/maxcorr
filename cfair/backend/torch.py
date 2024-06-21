@@ -19,7 +19,9 @@ class TorchBackend(Backend):
 
     def cast(self, v, dtype=None) -> Any:
         # torch uses 'torch.float64' as default type for 'float', use 'torch.float32' instead for compatibility
-        return self._backend.tensor(v, dtype=self._backend.float32 if dtype is float else dtype)
+        dtype = self._backend.float32 if dtype is float else dtype
+        # if the vector is already a torch tensor, simply change the dtype to avoid warnings
+        return v.to(dtype=dtype) if self.comply(v) else self._backend.tensor(v, dtype=dtype)
 
     def numpy(self, v, dtype=None) -> np.ndarray:
         # noinspection PyUnresolvedReferences

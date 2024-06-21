@@ -101,7 +101,7 @@ class HGR:
             The resulting projection.
         """
         assert self.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
-        return self._f(a=self.backend.cast(a, dtype=float))
+        return self._f(a=a)
 
     def g(self, b) -> Any:
         """Returns the mapped vector g(b) using the kernel function g computed in the last execution.
@@ -113,7 +113,7 @@ class HGR:
             The resulting projection.
         """
         assert self.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
-        return self._g(b=self.backend.cast(b, dtype=float))
+        return self._g(b=b)
 
     @abstractmethod
     def _f(self, a) -> Any:

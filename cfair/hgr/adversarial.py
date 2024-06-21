@@ -37,15 +37,11 @@ class AdversarialHGR(HGR):
         """
         super(AdversarialHGR, self).__init__(backend=backend)
         # use default backend if it has a neural engine, otherwise prioritize torch and then tensorflow
-        if isinstance(self.backend, TorchBackend):
-            build_fn = self._build_torch
-            train_fn = self._train_torch
-            neural_backend = self.backend
-        elif isinstance(self.backend, TensorflowBackend):
+        if isinstance(self.backend, TensorflowBackend):
             build_fn = self._build_tensorflow
             train_fn = self._train_tensorflow
             neural_backend = self.backend
-        elif importlib.util.find_spec('torch') is not None:
+        elif isinstance(self.backend, TorchBackend) or importlib.util.find_spec('torch') is not None:
             build_fn = self._build_torch
             train_fn = self._train_torch
             neural_backend = TorchBackend()
@@ -97,10 +93,12 @@ class AdversarialHGR(HGR):
         b_cast = self._neural_backend.reshape(self._neural_backend.cast(b, dtype=float), shape=(-1, 1))
         for _ in range(self._epochs_start if self.num_calls == 0 else self._epochs_successive):
             correlation = self._train_fn(a_cast, b_cast)
+        if self.backend is NumpyBackend():
+            correlation = self._neural_backend.numpy(correlation).item()
         return AdversarialHGR.Result(
             a=a,
             b=b,
-            correlation=self._backend.cast(correlation),
+            correlation=correlation,
             num_call=self.num_calls,
             hgr=self
         )
@@ -111,7 +109,9 @@ class AdversarialHGR(HGR):
         fa = self._netF(a)
         fa = self._neural_backend.reshape(fa, shape=-1)
         fa = self._neural_backend.standardize(fa, eps=self.eps)
-        return self._backend.cast(fa)
+        if self._backend is NumpyBackend():
+            fa = self._neural_backend.numpy(fa)
+        return fa
 
     def _g(self, b) -> Any:
         b = self._neural_backend.cast(b, dtype=float)
@@ -119,7 +119,9 @@ class AdversarialHGR(HGR):
         gb = self._netG(b)
         gb = self._neural_backend.reshape(gb, shape=-1)
         gb = self._neural_backend.standardize(gb, eps=self.eps)
-        return self._backend.cast(gb)
+        if self._backend is NumpyBackend():
+            gb = self._neural_backend.numpy(gb)
+        return gb
 
     def _hgr(self, a, b) -> Any:
         fa = self._neural_backend.standardize(self._netF(a), eps=self.eps)

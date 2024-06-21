@@ -6,7 +6,6 @@ from cfair.backend import Backend
 
 
 class NumpyBackend(Backend):
-
     _instance: Optional = None
 
     def __new__(cls):
@@ -22,11 +21,7 @@ class NumpyBackend(Backend):
         return np.ndarray
 
     def cast(self, v, dtype=None) -> Any:
-        # TODO: quick fix to handle cast of torch tensors with gradients
-        try:
-            return self._backend.array(v, dtype=dtype)
-        except RuntimeError:
-            return v.detach().cpu().numpy()
+        return self._backend.array(v, dtype=dtype)
 
     def numpy(self, v, dtype=None) -> np.ndarray:
         return v
