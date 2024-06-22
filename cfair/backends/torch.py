@@ -1,9 +1,9 @@
 import importlib.util
-from typing import Any, Type
+from typing import Any, Type, Union, Iterable
 
 import numpy as np
 
-from cfair.backend import Backend
+from cfair.backends import Backend
 
 
 class TorchBackend(Backend):
@@ -27,17 +27,20 @@ class TorchBackend(Backend):
         # noinspection PyUnresolvedReferences
         return v.detach().cpu().numpy()
 
-    def stack(self, v: list) -> Any:
-        return self._backend.stack(v, dim=1)
+    def stack(self, v: list, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        kwargs = dict() if axis is None else dict(dim=axis)
+        return self._backend.stack(v, **kwargs)
 
     def matmul(self, v, w) -> Any:
         return self._backend.matmul(v, w)
 
-    def mean(self, v) -> Any:
-        return self._backend.mean(v)
+    def mean(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        kwargs = dict() if axis is None else dict(dim=axis)
+        return self._backend.mean(v, **kwargs)
 
-    def var(self, v) -> Any:
-        return self._backend.var(v, unbiased=False)
+    def var(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        kwargs = dict() if axis is None else dict(dim=axis)
+        return self._backend.var(v, unbiased=False, **kwargs)
 
     def lstsq(self, a, b) -> Any:
         # the 'gelsd' driver allows to have both more precise and more reproducible results

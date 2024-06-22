@@ -2,8 +2,8 @@ from typing import Any, Type
 
 import torch
 
-from cfair.backend import Backend, TorchBackend
-from test.backend.test_backend import TestBackend
+from cfair.backends import Backend, TorchBackend
+from test.backends.test_backend import TestBackend
 
 
 class TestTorchBackend(TestBackend):

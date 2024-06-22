@@ -2,8 +2,8 @@ from typing import Any, Type
 
 import numpy as np
 
-from cfair.backend import Backend, NumpyBackend
-from test.backend.test_backend import TestBackend
+from cfair.backends import Backend, NumpyBackend
+from test.backends.test_backend import TestBackend
 
 
 class TestNumpyBackend(TestBackend):

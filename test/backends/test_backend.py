@@ -5,7 +5,7 @@ from typing import Any, Iterable, Union, Type, final, Tuple
 import numpy as np
 import pytest
 
-from cfair.backend import Backend
+from cfair.backends import Backend
 
 
 class TestBackend(unittest.TestCase):
@@ -116,7 +116,7 @@ class TestBackend(unittest.TestCase):
     def test_stack(self) -> None:
         refs = [self.vectors(seed=i)[0] for i in range(self.NUM)]
         vecs = [self.vectors(seed=i)[1] for i in range(self.NUM)]
-        vecs = self.backend.stack(v=vecs)
+        vecs = self.backend.stack(v=vecs, axis=1)
         self.assertEqual(
             self.backend.shape(vecs),
             (self.LENGTH, self.NUM),

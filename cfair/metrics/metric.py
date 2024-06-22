@@ -2,35 +2,35 @@ from abc import abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional, Union
 
-from cfair.backend import NumpyBackend, TorchBackend, Backend, TensorflowBackend
+from cfair.backends import NumpyBackend, TorchBackend, Backend, TensorflowBackend
 
 
-class HGR:
-    """Interface for an object that computes the HGR correlation."""
+class Metric:
+    """Interface of a fairness metric for continuous attributes."""
 
     @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
     class Result:
-        """Data class representing the results of an HGR computation."""
+        """Data class representing the results of a metric computation."""
 
         a: Any = field()
-        """The first of the two vectors on which the HGR correlation is computed."""
+        """The first of the two vectors on which the metric is computed."""
 
         b: Any = field()
-        """The first of the two vectors on which the HGR correlation is computed."""
+        """The first of the two vectors on which the metric is computed."""
 
-        correlation: Any = field()
-        """The actual value of the correlation, optionally with gradient information attached."""
+        value: Any = field()
+        """The value measured by the metric, optionally with gradient information attached."""
 
-        hgr: Any = field()
-        """The HGR instance that generated this result."""
+        metric: Any = field()
+        """The metric instance that generated this result."""
 
         num_call: int = field()
-        """The n-th time at which the HGR instance that generated the result was called."""
+        """The n-th time at which the metric instance that generated the result was called."""
 
     def __init__(self, backend: Union[str, Backend]):
         """
         :param backend:
-            The backend to use to compute the HGR correlation, or its alias.
+            The backend to use to compute the metric, or its alias.
         """
         if backend == 'numpy':
             backend = NumpyBackend()
@@ -41,7 +41,7 @@ class HGR:
         else:
             assert isinstance(backend, Backend), f"Unknown backend '{backend}'"
         self._backend: Backend = backend
-        self._last_result: Optional[HGR.Result] = None
+        self._last_result: Optional[Metric.Result] = None
         self._num_calls: int = 0
 
     @property
@@ -50,16 +50,16 @@ class HGR:
 
     @property
     def last_result(self) -> Optional[Result]:
-        """The `Result` instance returned from the last HGR call, or None if no call was performed."""
+        """The `Result` instance returned from the last metric call, or None if no call was performed."""
         return self._last_result
 
     @property
     def num_calls(self) -> int:
-        """The number of times that this HGR instance was called."""
+        """The number of times that this metric instance was called."""
         return self._num_calls
 
-    def correlation(self, a, b) -> Any:
-        """Computes the HGR correlation.
+    def value(self, a, b) -> Any:
+        """Computes the metric.
 
         :param a:
             The first vector.
@@ -68,11 +68,11 @@ class HGR:
             The second vector.
 
         :result:
-            A scalar value representing the computed correlation, optionally with gradient information attached."""
-        return self(a=a, b=b).correlation
+            A scalar value representing the computed metric value, optionally with gradient information attached."""
+        return self(a=a, b=b).value
 
     def __call__(self, a, b) -> Result:
-        """Computes the HGR correlation.
+        """Computes the metric.
 
         :param a:
             The first vector.
@@ -81,7 +81,7 @@ class HGR:
             The second vector.
 
         :result:
-            A `Result` instance containing the computed correlation together with additional information.
+            A `Result` instance containing the computed metric value together with additional information.
         """
         bk = self.backend
         assert bk.ndim(a) == bk.ndim(b) == 1, f"Expected vectors with one dimension, got {bk.ndim(a)} and {bk.ndim(b)}"
@@ -91,8 +91,16 @@ class HGR:
         self._last_result = res
         return res
 
+    @abstractmethod
+    def _compute(self, a, b) -> Result:
+        pass
+
+
+class CopulaMetric(Metric):
+    """Interface of a fairness metric for continuous attributes using copula transformations."""
+
     def f(self, a) -> Any:
-        """Returns the mapped vector f(a) using the kernel function f computed in the last execution.
+        """Returns the mapped vector f(a) using the copula transformation f computed in the last execution.
 
         :param a:
             The vector to be projected.
@@ -100,11 +108,11 @@ class HGR:
         :return:
             The resulting projection.
         """
-        assert self.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
+        assert self.last_result is not None, "The metric has not been computed yet, so no transformation can be used."
         return self._f(a=a)
 
     def g(self, b) -> Any:
-        """Returns the mapped vector g(b) using the kernel function g computed in the last execution.
+        """Returns the mapped vector g(b) using the copula transformation g computed in the last execution.
 
         :param b:
             The vector to be projected.
@@ -112,7 +120,7 @@ class HGR:
         :return:
             The resulting projection.
         """
-        assert self.last_result is not None, "HGR has not been computed yet, so no kernel can be used."
+        assert self.last_result is not None, "The metric has not been computed yet, so no transformation can be used."
         return self._g(b=b)
 
     @abstractmethod
@@ -121,8 +129,4 @@ class HGR:
 
     @abstractmethod
     def _g(self, b) -> Any:
-        pass
-
-    @abstractmethod
-    def _compute(self, a, b) -> Result:
         pass

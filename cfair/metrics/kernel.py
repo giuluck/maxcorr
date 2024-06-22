@@ -1,21 +1,21 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from typing import Tuple, Optional, List, Any, Union
+from typing import Tuple, Optional, List, Any, Union, Callable
 
 import numpy as np
 import scipy
 from scipy.optimize import NonlinearConstraint, minimize
 
-from cfair.backend import Backend
-from cfair.hgr.hgr import HGR
+from cfair.backends import Backend
+from cfair.metrics.metric import CopulaMetric
 
 
-class KernelBasedHGR(HGR):
-    """Kernel-based HGR interface."""
+class KernelBasedMetric(CopulaMetric):
+    """Kernel-based metric computed using user-defined kernels to approximate the copula transformations."""
 
     @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
-    class Result(HGR.Result):
-        """Data class representing the results of a KernelBasedHGR computation."""
+    class Result(CopulaMetric.Result):
+        """Data class representing the results of a KernelBasedMetric computation."""
 
         alpha: np.ndarray = field()
         """The coefficient vector for the f copula transformation."""
@@ -34,7 +34,7 @@ class KernelBasedHGR(HGR):
                  lasso: float):
         """
         :param backend:
-            The backend to use to compute the HGR correlation, or its alias.
+            The backend to use to compute the metric, or its alias.
 
         :param method:
             The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
@@ -55,9 +55,9 @@ class KernelBasedHGR(HGR):
             A delta value used to decide whether two columns are linearly dependent.
 
         :param lasso:
-            The amount of lasso regularization introduced when computing HGR.
+            The amount of lasso regularization introduced when computing the metric (ignored for lstsq computation).
         """
-        super(KernelBasedHGR, self).__init__(backend=backend)
+        super(KernelBasedMetric, self).__init__(backend=backend)
         self._method: str = method
         self._maxiter: int = maxiter
         self._eps: float = eps
@@ -66,16 +66,14 @@ class KernelBasedHGR(HGR):
         self._delta: float = delta
         self._lasso: lasso = lasso
 
-    @property
     @abstractmethod
-    def degree_a(self) -> int:
-        """The kernel degree for the first variable."""
+    def kernel_a(self, a) -> Any:
+        """The kernel for the first variable."""
         pass
 
-    @property
     @abstractmethod
-    def degree_b(self) -> int:
-        """The kernel degree for the second variable."""
+    def kernel_b(self, b) -> Any:
+        """The kernel for the second variable."""
         pass
 
     @property
@@ -110,20 +108,22 @@ class KernelBasedHGR(HGR):
 
     @property
     def lasso(self) -> float:
-        """The amount of lasso regularization introduced when computing HGR."""
+        """The amount of lasso regularization introduced when computing the metric."""
         return self._lasso
 
     def _f(self, a) -> Any:
-        fa = self.backend.stack([a ** d - self.backend.mean(a ** d) for d in np.arange(self.degree_a) + 1])
+        kernel = self.kernel_a(a)
         # noinspection PyUnresolvedReferences
         alpha = self.backend.cast(self.last_result.alpha)
-        return self.backend.matmul(fa, alpha)
+        fa = self.backend.matmul(kernel, alpha)
+        return self.backend.standardize(fa)
 
     def _g(self, b) -> Any:
-        gb = self.backend.stack([b ** d - self.backend.mean(b ** d) for d in np.arange(self.degree_b) + 1])
+        kernel = self.kernel_b(b)
         # noinspection PyUnresolvedReferences
         beta = self.backend.cast(self.last_result.beta)
-        return self.backend.matmul(gb, beta)
+        gb = self.backend.matmul(kernel, beta)
+        return self.backend.standardize(gb)
 
     def _get_linearly_independent(self, f: np.ndarray, g: np.ndarray) -> Tuple[List[int], List[int]]:
         """Returns the list of indices of those columns that are linearly independent to other ones."""
@@ -162,7 +162,7 @@ class KernelBasedHGR(HGR):
                                    g: np.ndarray,
                                    a0: Optional[np.ndarray],
                                    b0: Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        """Computes the kernel-based hgr for higher order degrees."""
+        """Computes the kernel coefficients for higher order kernels."""
         degree_x, degree_y = f.shape[1], g.shape[1]
         # retrieve the indices of the linearly dependent columns and impose a linear constraint so that the respective
         # weight is null for all but the first one (this processing step allow to avoid degenerate cases when the
@@ -236,17 +236,28 @@ class KernelBasedHGR(HGR):
         beta[g_indices] = s.x[dx:]
         return alpha, beta
 
-    def _kbhgr(self, a, b, degree_a: int = 1, degree_b: int = 1, a0: Optional = None, b0: Optional = None) -> Result:
-        """Computes HGR using numpy as backend and returns the correlation (without alpha and beta)."""
+    @abstractmethod
+    def _indicator(self, a, b, kernel_a: bool, kernel_b: bool, a0: Optional, b0: Optional) -> Result:
+        pass
+
+
+class KernelBasedHGR(KernelBasedMetric, ABC):
+    """Kernel-based metric interface where the computed indicator is HGR."""
+
+    def _indicator(self, a, b, kernel_a: bool, kernel_b: bool, a0: Optional, b0: Optional) -> KernelBasedMetric.Result:
         backend = self.backend
-        # build the kernel matrices
-        f = backend.stack([a ** d - backend.mean(a ** d) for d in np.arange(self.degree_a) + 1])
-        g = backend.stack([b ** d - backend.mean(b ** d) for d in np.arange(self.degree_b) + 1])
+        # build and center the kernel matrices
+        f = self.kernel_a(a) if kernel_a else self.backend.reshape(a, shape=(-1, 1))
+        f = f - self.backend.mean(f, axis=0)
+        g = self.kernel_b(b) if kernel_b else self.backend.reshape(b, shape=(-1, 1))
+        g = g - self.backend.mean(g, axis=0)
         # handle trivial or simpler cases:
         #  - if both degrees are 1, simply compute the projected vectors as standardized original vectors
         #  - if one degree is 1, standardize that vector and compute the other's coefficients using lstsq
         #  - if no degree is 1, use the optimization routine and compute the projected vectors from the coefficients
         alpha, beta = np.ones(1), np.ones(1)
+        _, degree_a = self.backend.shape(f)
+        _, degree_b = self.backend.shape(g)
         if degree_a == 1 and degree_b == 1:
             fa = backend.standardize(a, eps=self.eps)
             gb = backend.standardize(b, eps=self.eps)
@@ -264,26 +275,33 @@ class KernelBasedHGR(HGR):
             alpha, beta = self._higher_order_coefficients(f=backend.numpy(f), g=backend.numpy(g), a0=a0, b0=b0)
             fa = backend.standardize(backend.matmul(f, backend.cast(alpha, dtype=backend.dtype(f))), eps=self.eps)
             gb = backend.standardize(backend.matmul(g, backend.cast(beta, dtype=backend.dtype(g))), eps=self.eps)
-        # return the correlation as the absolute value of the (mean) vector product (since the vectors are standardized)
-        correlation = backend.abs(backend.matmul(fa, gb) / backend.len(fa))
-        return KernelBasedHGR.Result(
+        # return the HGR value as the absolute value of the (mean) vector product (since the vectors are standardized)
+        value = backend.abs(backend.matmul(fa, gb) / backend.len(fa))
+        return KernelBasedMetric.Result(
             a=a,
             b=b,
-            correlation=correlation,
+            value=value,
             num_call=self.num_calls,
-            hgr=self,
+            metric=self,
             alpha=alpha,
             beta=beta,
         )
 
 
-class DoubleKernelHGR(KernelBasedHGR):
-    """Kernel-based HGR computed by solving a constrained least square problem using a minimization solver."""
+class KernelBasedGeDI(KernelBasedMetric, ABC):
+    """Kernel-based metric interface where the computed indicator is GeDI."""
+
+    def _indicator(self, a, b, kernel_a: bool, kernel_b: bool, a0: Optional, b0: Optional) -> KernelBasedMetric.Result:
+        raise NotImplementedError()
+
+
+class DoubleKernelMetric(KernelBasedMetric, ABC):
+    """Kernel-based metric computed using two different explicit kernels for the variables."""
 
     def __init__(self,
                  backend: Union[str, Backend] = 'numpy',
-                 degree_a: int = 3,
-                 degree_b: int = 3,
+                 kernel_a: Union[int, Callable[[Any], Any]] = 3,
+                 kernel_b: Union[int, Callable[[Any], Any]] = 3,
                  method: str = 'trust-constr',
                  maxiter: int = 1000,
                  eps: float = 1e-9,
@@ -293,13 +311,13 @@ class DoubleKernelHGR(KernelBasedHGR):
                  lasso: float = 0.0):
         """
         :param backend:
-            The backend to use to compute the HGR correlation, or its alias.
+            The backend to use to compute the metric, or its alias.
 
-        :param degree_a:
-            The kernel degree for the first variable.
+        :param kernel_a:
+            Either a callable f(a) representing the variable's kernel, or an integer degree for a polynomial kernel.
 
-        :param degree_b:
-            The kernel degree for the second variable.
+        :param kernel_b:
+            Either a callable g(b) representing the variable's kernel, or an integer degree for a polynomial kernel.
 
         :param method:
             The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
@@ -320,9 +338,9 @@ class DoubleKernelHGR(KernelBasedHGR):
             A delta value used to decide whether two columns are linearly dependent.
 
         :param lasso:
-            The amount of lasso regularization introduced when computing HGR.
+            The amount of lasso regularization introduced when computing the metric (ignored for lstsq computation).
         """
-        super(DoubleKernelHGR, self).__init__(
+        super(DoubleKernelMetric, self).__init__(
             backend=backend,
             method=method,
             maxiter=maxiter,
@@ -332,29 +350,35 @@ class DoubleKernelHGR(KernelBasedHGR):
             delta=delta,
             lasso=lasso
         )
-        self._degree_a: int = degree_a
-        self._degree_b: int = degree_b
 
-    @property
-    def degree_a(self) -> int:
-        return self._degree_a
+        # handle kernels
+        if isinstance(kernel_a, int):
+            degree_a = kernel_a
+            kernel_a = lambda a: self.backend.stack([a ** d for d in np.arange(degree_a) + 1], axis=1)
+        if isinstance(kernel_b, int):
+            degree_b = kernel_b
+            kernel_b = lambda b: self.backend.stack([b ** d for d in np.arange(degree_b) + 1], axis=1)
+        self._kernel_a: Callable[[Any], Any] = kernel_a
+        self._kernel_b: Callable[[Any], Any] = kernel_b
 
-    @property
-    def degree_b(self) -> int:
-        return self._degree_b
+    def kernel_a(self, a) -> Any:
+        return self._kernel_a(a)
 
-    def _compute(self, a, b) -> KernelBasedHGR.Result:
+    def kernel_b(self, b) -> Any:
+        return self._kernel_b(b)
+
+    def _compute(self, a, b) -> KernelBasedMetric.Result:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
-        return self._kbhgr(a=a, b=b, degree_a=self.degree_a, degree_b=self.degree_b, a0=a0, b0=b0)
+        return self._indicator(a=a, b=b, kernel_a=True, kernel_b=True, a0=a0, b0=b0)
 
 
-class SingleKernelHGR(KernelBasedHGR):
-    """Kernel-based HGR computed using one kernel only for both variables and then taking the maximal correlation."""
+class SingleKernelMetric(KernelBasedMetric, ABC):
+    """Kernel-based metric computed using a single kernel for the variables, then taking the maximal value."""
 
     def __init__(self,
                  backend: Union[str, Backend] = 'numpy',
-                 degree: int = 3,
+                 kernel: Union[int, Callable[[Any], Any]] = 3,
                  method: str = 'trust-constr',
                  maxiter: int = 1000,
                  eps: float = 1e-9,
@@ -364,10 +388,10 @@ class SingleKernelHGR(KernelBasedHGR):
                  lasso: float = 0.0):
         """
         :param backend:
-            The backend to use to compute the HGR correlation, or its alias.
+            The backend to use to compute the metric, or its alias.
 
-        :param degree:
-            The kernel degree for the variables.
+        :param kernel:
+            Either a callable k(x) representing the variable's kernel, or an integer degree for a polynomial kernel.
 
         :param method:
             The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
@@ -388,9 +412,9 @@ class SingleKernelHGR(KernelBasedHGR):
             A delta value used to decide whether two columns are linearly dependent.
 
         :param lasso:
-            The amount of lasso regularization introduced when computing HGR.
+            The amount of lasso regularization introduced when computing the metric (ignored for lstsq computation).
         """
-        super(SingleKernelHGR, self).__init__(
+        super(SingleKernelMetric, self).__init__(
             backend=backend,
             method=method,
             maxiter=maxiter,
@@ -400,42 +424,122 @@ class SingleKernelHGR(KernelBasedHGR):
             delta=delta,
             lasso=lasso
         )
-        self._degree: int = degree
 
-    @property
-    def degree(self) -> int:
-        """The kernel degree for the variables."""
-        return self._degree
+        # handle kernel
+        if isinstance(kernel, int):
+            degree = kernel
+            kernel = lambda x: self.backend.stack([x ** d for d in np.arange(degree) + 1], axis=1)
+        self._kernel: Callable[[Any], Any] = kernel
 
-    @property
-    def degree_a(self) -> int:
-        return self._degree
+    def kernel(self, x) -> Any:
+        """The kernel for the variables."""
+        return self._kernel(x)
 
-    @property
-    def degree_b(self) -> int:
-        return self._degree
+    def kernel_a(self, a) -> Any:
+        return self._kernel(a)
 
-    def _compute(self, a, b) -> KernelBasedHGR.Result:
+    def kernel_b(self, b) -> Any:
+        return self._kernel(b)
+
+    def _compute(self, a, b) -> KernelBasedMetric.Result:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
-        res_a = self._kbhgr(a=a, b=b, degree_a=self.degree, a0=a0)
-        res_b = self._kbhgr(a=a, b=b, degree_b=self.degree, b0=b0)
-        cor_a = res_a.correlation
-        cor_b = res_b.correlation
-        if cor_a > cor_b:
-            correlation = cor_a
+        res_a = self._indicator(a=a, b=b, kernel_a=True, kernel_b=False, a0=a0, b0=None)
+        res_b = self._indicator(a=a, b=b, kernel_a=False, kernel_b=True, a0=None, b0=b0)
+        val_a = res_a.value
+        val_b = res_b.value
+        if val_a > val_b:
+            value = val_a
             alpha = res_a.alpha
-            beta = np.concatenate((res_a.beta, np.zeros(self.degree - 1)))
+            degree = len(alpha)
+            beta = np.concatenate((res_a.beta, np.zeros(degree - 1)))
         else:
-            correlation = cor_b
+            value = val_b
             beta = res_b.beta
-            alpha = np.concatenate((res_b.alpha, np.zeros(self.degree - 1)))
-        return KernelBasedHGR.Result(
+            degree = len(beta)
+            alpha = np.concatenate((res_b.alpha, np.zeros(degree - 1)))
+        return KernelBasedMetric.Result(
             a=a,
             b=b,
-            correlation=correlation,
+            value=value,
             num_call=self.num_calls,
-            hgr=self,
+            metric=self,
             alpha=alpha,
             beta=beta,
+        )
+
+
+class DoubleKernelHGR(DoubleKernelMetric, KernelBasedHGR):
+    """HGR indicator computed using two different explicit kernels for the variables."""
+    pass
+
+
+class SingleKernelHGR(SingleKernelMetric, KernelBasedHGR):
+    """HGR indicator computed using a single kernel for the variables, then taking the maximal value."""
+    pass
+
+
+class DoubleKernelGeDI(DoubleKernelMetric, KernelBasedGeDI):
+    """GeDI indicator computed using two different explicit kernels for the variables."""
+    pass
+
+
+class SingleKernelGeDI(SingleKernelMetric, KernelBasedGeDI):
+    """GeDI indicator computed using a single kernel for the variables, then taking the maximal value."""
+    pass
+
+
+class GeneralizedDisparateImpact(DoubleKernelGeDI):
+    """GeDI indicator computed as for its original formulation in the paper "Generalized Disparate Impact for
+    Configurable Fairness Solutions in ML", i.e., using the kernel of the first vector only."""
+
+    def __init__(self,
+                 backend: Union[str, Backend] = 'numpy',
+                 kernel: Union[int, Callable[[Any], Any]] = 3,
+                 method: str = 'trust-constr',
+                 maxiter: int = 1000,
+                 eps: float = 1e-9,
+                 tol: float = 1e-2,
+                 use_lstsq: bool = True,
+                 delta: float = 1e-2,
+                 lasso: float = 0.0):
+        """
+        :param backend:
+            The backend to use to compute the metric, or its alias.
+
+        :param kernel:
+            Either a callable f(a) representing the input kernel, or an integer degree for a polynomial kernel.
+
+        :param method:
+            The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
+
+        :param maxiter:
+            The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize.
+
+        :param eps:
+            The epsilon value used to avoid division by zero in case of null standard deviation.
+
+        :param tol:
+            The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize.
+
+        :param use_lstsq:
+            Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1.
+
+        :param delta:
+            A delta value used to decide whether two columns are linearly dependent.
+
+        :param lasso:
+            The amount of lasso regularization introduced when computing the metric (ignored for lstsq computation).
+        """
+        super(DoubleKernelGeDI, self).__init__(
+            backend=backend,
+            kernel_a=kernel,
+            kernel_b=1,
+            method=method,
+            maxiter=maxiter,
+            eps=eps,
+            tol=tol,
+            use_lstsq=use_lstsq,
+            delta=delta,
+            lasso=lasso
         )

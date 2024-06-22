@@ -201,11 +201,14 @@ class Backend:
         return self.shape(v)[0]
 
     @abstractmethod
-    def stack(self, v: list) -> Any:
+    def stack(self, v: list, axis: Union[None, int, Iterable[int]] = None) -> Any:
         """Stacks multiple vectors into a matrix.
 
         :param v:
             The list of vectors to stack.
+
+        :param axis:
+            The axis (dimensions) on which to stack the vectors.
 
         :return:
             The stacked matrix.
@@ -275,11 +278,14 @@ class Backend:
         return self._backend.maximum(v, w)
 
     @abstractmethod
-    def mean(self, v) -> Any:
+    def mean(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         """Computes the mean of the vector.
 
         :param v:
             The input vector.
+
+        :param axis:
+            The axis (dimensions) on which to compute the mean.
 
         :return:
             The mean of the vector.
@@ -287,11 +293,14 @@ class Backend:
         pass
 
     @abstractmethod
-    def var(self, v) -> Any:
+    def var(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         """Computes the variance of the vector.
 
         :param v:
             The input vector.
+
+        :param axis:
+            The axis (dimensions) on which to compute the variance.
 
         :return:
             The variance of the vector.
@@ -299,16 +308,19 @@ class Backend:
         pass
 
     @final
-    def std(self, v) -> Any:
+    def std(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         """Computes the standard deviation of the vector.
 
         :param v:
             The input vector.
 
+        :param axis:
+            The axis (dimension) on which to compute the standard deviation.
+
         :return:
             The standard deviation of the vector.
         """
-        return self.sqrt(self.var(v))
+        return self.sqrt(self.var(v, axis=axis))
 
     @final
     def standardize(self, v, eps: float = 1e-9) -> Any:

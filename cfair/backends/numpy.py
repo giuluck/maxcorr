@@ -1,8 +1,8 @@
-from typing import Any, Type, Optional
+from typing import Any, Type, Optional, Union, Iterable
 
 import numpy as np
 
-from cfair.backend import Backend
+from cfair.backends import Backend
 
 
 class NumpyBackend(Backend):
@@ -26,17 +26,17 @@ class NumpyBackend(Backend):
     def numpy(self, v, dtype=None) -> np.ndarray:
         return v
 
-    def stack(self, v: list) -> Any:
-        return self._backend.stack(v, axis=1)
+    def stack(self, v: list, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        return self._backend.stack(v, axis=axis)
 
     def matmul(self, v, w) -> Any:
         return self._backend.matmul(v, w)
 
-    def mean(self, v) -> Any:
-        return self._backend.mean(v)
+    def mean(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        return self._backend.mean(v, axis=axis)
 
-    def var(self, v) -> Any:
-        return self._backend.var(v, ddof=0)
+    def var(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        return self._backend.var(v, axis=axis, ddof=0)
 
     def lstsq(self, a, b) -> Any:
         return self._backend.linalg.lstsq(a, b, rcond=None)[0]

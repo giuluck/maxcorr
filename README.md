@@ -1,1 +1,1 @@
-## HGR: A Package for Fairness with Continuous Attributes using the Hirschfeld–Gebelein–Rényi Coefficient
+## cFair: A Package for Fairness with Continuous Attributes

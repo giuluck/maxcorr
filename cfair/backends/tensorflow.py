@@ -1,9 +1,9 @@
 import importlib.util
-from typing import Any, Type
+from typing import Any, Type, Union, Iterable
 
 import numpy as np
 
-from cfair.backend import Backend
+from cfair.backends import Backend
 
 
 class TensorflowBackend(Backend):
@@ -27,8 +27,8 @@ class TensorflowBackend(Backend):
         # noinspection PyUnresolvedReferences
         return v.numpy()
 
-    def stack(self, v: list) -> Any:
-        return self._backend.stack(v, axis=1)
+    def stack(self, v: list, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        return self._backend.stack(v, axis=axis)
 
     def matmul(self, v, w) -> Any:
         v = self.reshape(v, shape=(1, -1)) if self.ndim(v) == 1 else v
@@ -36,11 +36,11 @@ class TensorflowBackend(Backend):
         s = self._backend.linalg.matmul(v, w)
         return self.reshape(s, shape=-1)
 
-    def mean(self, v) -> Any:
-        return self._backend.math.reduce_mean(v)
+    def mean(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        return self._backend.math.reduce_mean(v, axis=axis)
 
-    def var(self, v) -> Any:
-        return self._backend.math.reduce_variance(v)
+    def var(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        return self._backend.math.reduce_variance(v, axis=axis)
 
     def lstsq(self, a, b) -> Any:
         # use fast=False to obtain more robust results

@@ -6,12 +6,12 @@ containing the code of the paper: https://github.com/fairml-research/HGR_NN/tree
 import importlib.util
 from typing import Any, Union, Iterable, Optional, Tuple, Callable
 
-from cfair.backend import Backend, NumpyBackend, TorchBackend, TensorflowBackend
-from cfair.hgr.hgr import HGR
+from cfair.backends import Backend, NumpyBackend, TorchBackend, TensorflowBackend
+from cfair.metrics.metric import CopulaMetric
 
 
-class AdversarialHGR(HGR):
-    """Adversarial HGR computed using two neural networks to approximate the copula transformations."""
+class AdversarialHGR(CopulaMetric):
+    """HGR indicator computed using two neural networks to approximate the copula transformations."""
 
     def __init__(self,
                  backend: Union[str, Backend] = 'numpy',
@@ -21,7 +21,7 @@ class AdversarialHGR(HGR):
                  eps: float = 1e-9):
         """
         :param backend:
-            The backend to use to compute the HGR correlation, or its alias.
+            The backend to use to compute the metric, or its alias.
 
         :param units:
             The hidden units of the neural networks.
@@ -86,22 +86,10 @@ class AdversarialHGR(HGR):
         """The epsilon value used to avoid division by zero in case of null standard deviation."""
         return self._eps
 
-    def _compute(self, a, b) -> HGR.Result:
-        correlation = None
-        # cast the vectors to the neural backend type
-        a_cast = self._neural_backend.reshape(self._neural_backend.cast(a, dtype=float), shape=(-1, 1))
-        b_cast = self._neural_backend.reshape(self._neural_backend.cast(b, dtype=float), shape=(-1, 1))
-        for _ in range(self._epochs_start if self.num_calls == 0 else self._epochs_successive):
-            correlation = self._train_fn(a_cast, b_cast)
-        if self.backend is NumpyBackend():
-            correlation = self._neural_backend.numpy(correlation).item()
-        return AdversarialHGR.Result(
-            a=a,
-            b=b,
-            correlation=correlation,
-            num_call=self.num_calls,
-            hgr=self
-        )
+    def _indicator(self, a, b) -> Any:
+        fa = self._neural_backend.standardize(self._netF(a), eps=self.eps)
+        gb = self._neural_backend.standardize(self._netG(b), eps=self.eps)
+        return self._neural_backend.mean(fa * gb)
 
     def _f(self, a) -> Any:
         a = self._neural_backend.cast(a, dtype=float)
@@ -123,10 +111,22 @@ class AdversarialHGR(HGR):
             gb = self._neural_backend.numpy(gb)
         return gb
 
-    def _hgr(self, a, b) -> Any:
-        fa = self._neural_backend.standardize(self._netF(a), eps=self.eps)
-        gb = self._neural_backend.standardize(self._netG(b), eps=self.eps)
-        return self._neural_backend.mean(fa * gb)
+    def _compute(self, a, b) -> CopulaMetric.Result:
+        value = None
+        # cast the vectors to the neural backend type
+        a_cast = self._neural_backend.reshape(self._neural_backend.cast(a, dtype=float), shape=(-1, 1))
+        b_cast = self._neural_backend.reshape(self._neural_backend.cast(b, dtype=float), shape=(-1, 1))
+        for _ in range(self._epochs_start if self.num_calls == 0 else self._epochs_successive):
+            value = self._train_fn(a_cast, b_cast)
+        if self.backend is NumpyBackend():
+            value = self._neural_backend.numpy(value).item()
+        return AdversarialHGR.Result(
+            a=a,
+            b=b,
+            value=value,
+            num_call=self.num_calls,
+            metric=self
+        )
 
     def _build_torch(self) -> tuple:
         import torch
@@ -139,12 +139,12 @@ class AdversarialHGR(HGR):
     def _train_torch(self, a, b) -> Any:
         self._optF.zero_grad()
         self._optG.zero_grad()
-        hgr = self._hgr(a, b)
-        loss = -hgr
+        metric = self._indicator(a, b)
+        loss = -metric
         loss.backward()
         self._optF.step()
         self._optG.step()
-        return hgr
+        return metric
 
     def _build_tensorflow(self) -> tuple:
         import tensorflow as tf
@@ -154,10 +154,10 @@ class AdversarialHGR(HGR):
     def _train_tensorflow(self, a, b) -> Any:
         import tensorflow as tf
         with tf.GradientTape(persistent=True) as tape:
-            hgr = self._hgr(a, b)
-            loss = -hgr
+            metric = self._indicator(a, b)
+            loss = -metric
         f_grads = tape.gradient(loss, self._netF.trainable_weights)
         g_grads = tape.gradient(loss, self._netG.trainable_weights)
         self._optF.apply_gradients(zip(f_grads, self._netF.trainable_weights))
         self._optG.apply_gradients(zip(g_grads, self._netG.trainable_weights))
-        return hgr
+        return metric
