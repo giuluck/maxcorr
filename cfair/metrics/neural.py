@@ -15,7 +15,8 @@ class NeuralHGR(CopulaMetric):
 
     def __init__(self,
                  backend: Union[str, Backend] = 'numpy',
-                 units: Iterable[int] = (16, 16, 8),
+                 f_units: Optional[Iterable[int]] = (16, 16, 8),
+                 g_units: Optional[Iterable[int]] = (16, 16, 8),
                  epochs_start: int = 1000,
                  epochs_successive: Optional[int] = 50,
                  eps: float = 1e-9):
@@ -23,8 +24,11 @@ class NeuralHGR(CopulaMetric):
         :param backend:
             The backend to use to compute the metric, or its alias.
 
-        :param units:
-            The hidden units of the neural networks.
+        :param f_units:
+            The hidden units of the F copula network, or None for no F copula network.
+
+        :param g_units:
+            The hidden units of the G copula network, or None for no G copula network.
 
         :param epochs_start:
             The number of training epochs in the first call.
@@ -35,6 +39,7 @@ class NeuralHGR(CopulaMetric):
         :param eps:
             The epsilon value used to avoid division by zero in case of null standard deviation.
         """
+        assert f_units is not None or g_units is not None, "Either f_units or g_units must not be None"
         super(NeuralHGR, self).__init__(backend=backend)
         # use default backend if it has a neural engine, otherwise prioritize torch and then tensorflow
         if isinstance(self.backend, TensorflowBackend):
@@ -58,18 +63,24 @@ class NeuralHGR(CopulaMetric):
             raise AssertionError(f"Unsupported backend f'{self.backend}")
 
         self._eps: float = eps
-        self._units: Tuple[int] = tuple(units)
+        self._unitsF: Optional[Tuple[int]] = None if f_units is None else tuple(f_units)
+        self._unitsG: Optional[Tuple[int]] = None if g_units is None else tuple(g_units)
         self._epochs_start: int = epochs_start
         self._epochs_successive: int = epochs_successive
         self._neural_backend: Backend = neural_backend
         self._train_fn: Callable = train_fn
-        self._netF, self._optF = build_fn()
-        self._netG, self._optG = build_fn()
+        self._netF, self._optF = build_fn(units=self.f_units)
+        self._netG, self._optG = build_fn(units=self.g_units)
 
     @property
-    def units(self) -> Tuple[int]:
-        """The hidden units of the neural networks."""
-        return self._units
+    def f_units(self) -> Optional[Tuple[int]]:
+        """The hidden units of the F copula network, or None if no F copula network."""
+        return self._unitsF
+
+    @property
+    def g_units(self) -> Optional[Tuple[int]]:
+        """The hidden units of the G copula network, or None if no G copula network."""
+        return self._unitsG
 
     @property
     def epochs_start(self) -> int:
@@ -96,20 +107,14 @@ class NeuralHGR(CopulaMetric):
         a = self._neural_backend.reshape(a, shape=(-1, 1))
         fa = self._netF(a)
         fa = self._neural_backend.reshape(fa, shape=-1)
-        fa = self._neural_backend.standardize(fa, eps=self.eps)
-        if self._backend is NumpyBackend():
-            fa = self._neural_backend.numpy(fa)
-        return fa
+        return self._neural_backend.numpy(fa) if self._backend is NumpyBackend() else fa
 
     def _g(self, b) -> Any:
         b = self._neural_backend.cast(b, dtype=float)
         b = self._neural_backend.reshape(b, shape=(-1, 1))
         gb = self._netG(b)
         gb = self._neural_backend.reshape(gb, shape=-1)
-        gb = self._neural_backend.standardize(gb, eps=self.eps)
-        if self._backend is NumpyBackend():
-            gb = self._neural_backend.numpy(gb)
-        return gb
+        return self._neural_backend.numpy(gb) if self._backend is NumpyBackend() else gb
 
     def _compute(self, a, b) -> CopulaMetric.Result:
         value = None
@@ -118,6 +123,7 @@ class NeuralHGR(CopulaMetric):
         b_cast = self._neural_backend.reshape(self._neural_backend.cast(b, dtype=float), shape=(-1, 1))
         for _ in range(self._epochs_start if self.num_calls == 0 else self._epochs_successive):
             value = self._train_fn(a_cast, b_cast)
+        value = self._neural_backend.abs(value)
         if self.backend is NumpyBackend():
             value = self._neural_backend.numpy(value).item()
         return NeuralHGR.Result(
@@ -128,13 +134,27 @@ class NeuralHGR(CopulaMetric):
             metric=self
         )
 
-    def _build_torch(self) -> tuple:
+    @staticmethod
+    def _build_torch(units: Optional[Tuple[int]]) -> tuple:
         import torch
-        layers = []
-        for inp, out in zip([1, *self.units], [*self.units, 1]):
-            layers += [torch.nn.Linear(inp, out), torch.nn.ReLU()]
-        network = torch.nn.Sequential(*layers[:-1])
-        return network, torch.optim.Adam(network.parameters(), lr=0.0005)
+
+        class DummyOptimizer:
+            def zero_grad(self):
+                return
+
+            def step(self):
+                return
+
+        if units is None:
+            network = torch.nn.Sequential()
+            optimizer = DummyOptimizer()
+        else:
+            layers = []
+            for inp, out in zip([1, *units], [*units, 1]):
+                layers += [torch.nn.Linear(inp, out), torch.nn.ReLU()]
+            network = torch.nn.Sequential(*layers[:-1])
+            optimizer = torch.optim.Adam(network.parameters(), lr=0.0005)
+        return network, optimizer
 
     def _train_torch(self, a, b) -> Any:
         self._optF.zero_grad()
@@ -146,10 +166,17 @@ class NeuralHGR(CopulaMetric):
         self._optG.step()
         return metric
 
-    def _build_tensorflow(self) -> tuple:
+    @staticmethod
+    def _build_tensorflow(units: Optional[Tuple[int]]) -> tuple:
         import tensorflow as tf
-        layers = [tf.keras.layers.Dense(out, activation='relu') for out in self.units]
-        return tf.keras.Sequential([*layers, tf.keras.layers.Dense(1)]), tf.keras.optimizers.Adam(learning_rate=0.0005)
+        if units is None:
+            layers = []
+        else:
+            layers = [tf.keras.layers.Dense(out, activation='relu') for out in units]
+            layers = [*layers, tf.keras.layers.Dense(1)]
+        network = tf.keras.Sequential(layers)
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005)
+        return network, optimizer
 
     def _train_tensorflow(self, a, b) -> Any:
         import tensorflow as tf
