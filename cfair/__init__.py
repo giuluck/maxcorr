@@ -1,9 +1,8 @@
 from typing import Union
 
 from cfair.backends import Backend
-from cfair.metrics.adversarial import AdversarialHGR
-from cfair.metrics.kernel import DoubleKernelHGR, SingleKernelHGR, DoubleKernelGeDI, SingleKernelGeDI, \
-    GeneralizedDisparateImpact
+from cfair.metrics.neural import NeuralHGR
+from cfair.metrics.kernel import DoubleKernelHGR, SingleKernelHGR, GeneralizedDisparateImpact
 from cfair.metrics.metric import Metric
 
 
@@ -24,8 +23,8 @@ def hgr(backend: Union[str, Backend], algorithm: str, **kwargs) -> Metric:
         return DoubleKernelHGR(backend=backend, **kwargs)
     elif algorithm == 'single kernel':
         return SingleKernelHGR(backend=backend, **kwargs)
-    elif algorithm == 'adversarial':
-        return AdversarialHGR(backend=backend, **kwargs)
+    elif algorithm == 'neural':
+        return NeuralHGR(backend=backend, **kwargs)
     else:
         raise AssertionError(f"Unsupported HGR algorithm '{algorithm}'")
 

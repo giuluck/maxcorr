@@ -195,5 +195,5 @@ class TestBackend(unittest.TestCase):
         ref1, vec1 = self.vectors(shape=(self.LENGTH, self.NUM), seed=0)
         ref2, vec2 = self.vectors(shape=self.LENGTH, seed=1)
         ref = np.linalg.lstsq(ref1, ref2, rcond=None)[0]
-        vec = self.backend.numpy(self.backend.lstsq(a=vec1, b=vec2))
+        vec = self.backend.numpy(self.backend.lstsq(A=vec1, b=vec2))
         self.assertTrue(np.allclose(ref, vec), msg="Lstsq method should return the least-square problem solution")

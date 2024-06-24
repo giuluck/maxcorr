@@ -42,8 +42,8 @@ class TensorflowBackend(Backend):
     def var(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         return self._backend.math.reduce_variance(v, axis=axis)
 
-    def lstsq(self, a, b) -> Any:
+    def lstsq(self, A, b) -> Any:
         # use fast=False to obtain more robust results
         b = self.reshape(b, shape=(-1, 1))
-        w = self._backend.linalg.lstsq(a, b, fast=False)
+        w = self._backend.linalg.lstsq(A, b, fast=False)
         return self.reshape(w, shape=-1)

@@ -42,6 +42,6 @@ class TorchBackend(Backend):
         kwargs = dict() if axis is None else dict(dim=axis)
         return self._backend.var(v, unbiased=False, **kwargs)
 
-    def lstsq(self, a, b) -> Any:
+    def lstsq(self, A, b) -> Any:
         # the 'gelsd' driver allows to have both more precise and more reproducible results
-        return self._backend.linalg.lstsq(a, b, driver='gelsd')[0]
+        return self._backend.linalg.lstsq(A, b, driver='gelsd')[0]

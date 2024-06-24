@@ -38,5 +38,5 @@ class NumpyBackend(Backend):
     def var(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         return self._backend.var(v, axis=axis, ddof=0)
 
-    def lstsq(self, a, b) -> Any:
-        return self._backend.linalg.lstsq(a, b, rcond=None)[0]
+    def lstsq(self, A, b) -> Any:
+        return self._backend.linalg.lstsq(A, b, rcond=None)[0]

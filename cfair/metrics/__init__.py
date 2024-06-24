@@ -1,4 +1,3 @@
-from cfair.metrics.adversarial import AdversarialHGR
-from cfair.metrics.kernel import DoubleKernelHGR, SingleKernelHGR, DoubleKernelGeDI, SingleKernelGeDI, \
-    GeneralizedDisparateImpact
+from cfair.metrics.neural import NeuralHGR
+from cfair.metrics.kernel import DoubleKernelHGR, SingleKernelHGR, GeneralizedDisparateImpact
 from cfair.metrics.metric import Metric

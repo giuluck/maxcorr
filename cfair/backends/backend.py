@@ -162,6 +162,7 @@ class Backend:
         :return:
             The reshaped vector.
         """
+        shape = (shape,) if isinstance(shape, int) else shape
         return self._backend.reshape(v, shape)
 
     # noinspection PyMethodMayBeStatic
@@ -337,11 +338,12 @@ class Backend:
         """
         return (v - self.mean(v)) / self.sqrt(self.var(v) + eps)
 
+    # noinspection PyPep8Naming
     @abstractmethod
-    def lstsq(self, a, b) -> Any:
+    def lstsq(self, A, b) -> Any:
         """Runs least-square error fitting on the given vector and matrix.
 
-        :param a:
+        :param A:
             The lhs matrix A.
 
         :param b:

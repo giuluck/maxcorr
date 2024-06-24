@@ -10,7 +10,7 @@ from cfair.backends import Backend, NumpyBackend, TorchBackend, TensorflowBacken
 from cfair.metrics.metric import CopulaMetric
 
 
-class AdversarialHGR(CopulaMetric):
+class NeuralHGR(CopulaMetric):
     """HGR indicator computed using two neural networks to approximate the copula transformations."""
 
     def __init__(self,
@@ -35,7 +35,7 @@ class AdversarialHGR(CopulaMetric):
         :param eps:
             The epsilon value used to avoid division by zero in case of null standard deviation.
         """
-        super(AdversarialHGR, self).__init__(backend=backend)
+        super(NeuralHGR, self).__init__(backend=backend)
         # use default backend if it has a neural engine, otherwise prioritize torch and then tensorflow
         if isinstance(self.backend, TensorflowBackend):
             build_fn = self._build_tensorflow
@@ -51,7 +51,7 @@ class AdversarialHGR(CopulaMetric):
             neural_backend = TensorflowBackend()
         elif isinstance(self.backend, NumpyBackend):
             raise ModuleNotFoundError(
-                "AdversarialHGR relies on neural networks and needs either pytorch or tensorflow installed even if "
+                "NeuralHGR relies on neural networks and needs either pytorch or tensorflow installed even if "
                 "NumpyBackend() is selected. Please install it via 'pip install torch' or 'pip install tensorflow'"
             )
         else:
@@ -120,7 +120,7 @@ class AdversarialHGR(CopulaMetric):
             value = self._train_fn(a_cast, b_cast)
         if self.backend is NumpyBackend():
             value = self._neural_backend.numpy(value).item()
-        return AdversarialHGR.Result(
+        return NeuralHGR.Result(
             a=a,
             b=b,
             value=value,
