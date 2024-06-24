@@ -166,22 +166,37 @@ class TestBackend(unittest.TestCase):
     def test_mean(self) -> None:
         ref, vec = self.vectors()
         ref = np.mean(ref)
-        vec = self.backend.mean(v=vec)
+        vec = self.backend.numpy(self.backend.mean(v=vec))
         self.assertTrue(np.isclose(ref, vec), msg="Mean method should return the mean of the vector")
 
     @final
-    def test_std(self) -> None:
+    def test_sum(self) -> None:
         ref, vec = self.vectors()
-        ref = np.std(ref, ddof=0)
-        vec = self.backend.std(v=vec)
-        self.assertTrue(np.isclose(ref, vec), msg="Std method should return the standard deviation of the vector")
+        ref = np.sum(ref)
+        vec = self.backend.numpy(self.backend.sum(v=vec))
+        self.assertTrue(np.isclose(ref, vec), msg="Sum method should return the sum of the vector")
+
+    @final
+    def test_cov(self) -> None:
+        ref1, vec1 = self.vectors(seed=0)
+        ref2, vec2 = self.vectors(seed=1)
+        ref = np.cov([ref1, ref2], ddof=0)
+        vec = self.backend.numpy(self.backend.cov(v=vec1, w=vec2))
+        self.assertTrue(np.allclose(ref, vec), msg="Cov method should return the covariance matrix of the vectors")
 
     @final
     def test_var(self) -> None:
         ref, vec = self.vectors()
         ref = np.var(ref, ddof=0)
-        vec = self.backend.var(v=vec)
+        vec = self.backend.numpy(self.backend.var(v=vec))
         self.assertTrue(np.isclose(ref, vec), msg="Var method should return the variance of the vector")
+
+    @final
+    def test_std(self) -> None:
+        ref, vec = self.vectors()
+        ref = np.std(ref, ddof=0)
+        vec = self.backend.numpy(self.backend.std(v=vec))
+        self.assertTrue(np.isclose(ref, vec), msg="Std method should return the standard deviation of the vector")
 
     @final
     def test_standardize(self) -> None:

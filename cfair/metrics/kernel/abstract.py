@@ -13,7 +13,6 @@ from typing import Tuple, Optional, List, Any, Union, Callable, final
 
 import numpy as np
 import scipy
-from scipy.optimize import minimize, NonlinearConstraint
 
 from cfair.backends import Backend
 from cfair.metrics.metric import CopulaMetric
@@ -115,16 +114,14 @@ class KernelBasedMetric(CopulaMetric):
         kernel = self.backend.stack(self.kernel_a(a), axis=1)
         # noinspection PyUnresolvedReferences
         alpha = self.backend.cast(self.last_result.alpha)
-        fa = self.backend.matmul(kernel, alpha)
-        return self.backend.standardize(fa, eps=self.eps)
+        return self.backend.matmul(kernel, alpha)
 
     @final
     def _g(self, b) -> Any:
         kernel = self.backend.stack(self.kernel_b(b), axis=1)
         # noinspection PyUnresolvedReferences
         beta = self.backend.cast(self.last_result.beta)
-        gb = self.backend.matmul(kernel, beta)
-        return self.backend.standardize(gb, eps=self.eps)
+        return self.backend.matmul(kernel, beta)
 
     @final
     def _indices(self, f: list, g: list) -> Tuple[Tuple[list, List[int]], Tuple[list, List[int]]]:
@@ -203,7 +200,7 @@ class KernelBasedMetric(CopulaMetric):
             f=f,
             g=g,
             a0=None if a0 is None else a0[f_indices],
-            b0=None if b0 is None else b0[f_indices]
+            b0=None if b0 is None else b0[g_indices]
         )
         # reconstruct alpha and beta by adding zeros for the ignored indices
         alpha = np.zeros(degree_a)
@@ -221,47 +218,6 @@ class KernelBasedMetric(CopulaMetric):
             beta=beta,
         )
 
-    def _constrained_lstsq(self,
-                           f: np.ndarray,
-                           g: np.ndarray,
-                           a0: Optional[np.ndarray],
-                           b0: Optional[np.ndarray],
-                           constraints: List[NonlinearConstraint]) -> Tuple[np.ndarray, np.ndarray]:
-        n, degree_a = f.shape
-        _, degree_b = g.shape
-        fg = np.concatenate((f, -g), axis=1)
-
-        # define the function to optimize as the least square problem:
-        #   - func:   || F @ alpha - G @ beta ||_2^2 =
-        #           =   (F @ alpha - G @ beta) @ (F @ alpha - G @ beta)
-        #   - grad:   [ 2 * F.T @ (F @ alpha - G @ beta) | -2 * G.T @ (F @ alpha - G @ beta) ] =
-        #           =   2 * [F | -G].T @ (F @ alpha - G @ beta)
-        #   - hess:   [  2 * F.T @ F | -2 * F.T @ G ]
-        #             [ -2 * G.T @ F |  2 * G.T @ G ] =
-        #           =    2 * [F  -G].T @ [F  -G]
-        def _fun(inp):
-            alp, bet = inp[:degree_a], inp[degree_a:]
-            diff = f @ alp - g @ bet
-            obj_func = diff @ diff
-            obj_grad = 2 * fg.T @ diff
-            return obj_func, obj_grad
-
-        # if no guess is provided, set the initial point as [ 1 / std(F @ 1) | 1 / std(G @ 1) ] then solve
-        a0 = np.ones(degree_a) / np.sqrt(f.sum(axis=1).var(ddof=0) + self.eps) if a0 is None else a0
-        b0 = np.ones(degree_b) / np.sqrt(g.sum(axis=1).var(ddof=0) + self.eps) if b0 is None else b0
-        x0 = np.concatenate((a0, b0))
-        s = minimize(
-            _fun,
-            jac=True,
-            hess=lambda *_: 2 * fg.T @ fg,
-            x0=x0,
-            constraints=constraints,
-            method=self.method,
-            tol=self.tol,
-            options={'maxiter': self.maxiter}
-        )
-        return s.x[:degree_a], s.x[degree_a:]
-
     @abstractmethod
     def _indicator(self, f, g, a0: Optional, b0: Optional) -> Tuple[Any, np.ndarray, np.ndarray]:
         pass
@@ -277,7 +233,7 @@ class DoubleKernelMetric(KernelBasedMetric, ABC):
                  method: str = 'trust-constr',
                  maxiter: int = 1000,
                  eps: float = 1e-9,
-                 tol: float = 1e-2,
+                 tol: float = 1e-9,
                  use_lstsq: bool = True,
                  delta_independent: Optional[float] = None):
         """
@@ -349,7 +305,7 @@ class SingleKernelMetric(KernelBasedMetric, ABC):
                  method: str = 'trust-constr',
                  maxiter: int = 1000,
                  eps: float = 1e-9,
-                 tol: float = 1e-2,
+                 tol: float = 1e-9,
                  use_lstsq: bool = True,
                  delta_independent: Optional[float] = None):
         """

@@ -71,7 +71,7 @@ class Metric:
             A scalar value representing the computed metric value, optionally with gradient information attached."""
         return self(a=a, b=b).value
 
-    def __call__(self, a, b) -> Result:
+    def __call__(self, a, b) -> Any:
         """Computes the metric.
 
         :param a:

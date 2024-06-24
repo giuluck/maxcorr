@@ -202,7 +202,7 @@ class Backend:
         return self.shape(v)[0]
 
     @abstractmethod
-    def stack(self, v: list, axis: Union[None, int, Iterable[int]] = None) -> Any:
+    def stack(self, v: list, axis: Union[int, Iterable[int]] = 0) -> Any:
         """Stacks multiple vectors into a matrix.
 
         :param v:
@@ -290,6 +290,36 @@ class Backend:
 
         :return:
             The mean of the vector.
+        """
+        pass
+
+    @abstractmethod
+    def sum(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        """Computes the sum of the vector.
+
+        :param v:
+            The input vector.
+
+        :param axis:
+            The axis (dimensions) on which to compute the sum.
+
+        :return:
+            The sum of the vector.
+        """
+        pass
+
+    @abstractmethod
+    def cov(self, v, w) -> Any:
+        """Computes the covariance between the two vector.
+
+        :param v:
+            The first input vector.
+
+        :param w:
+            The second input vector.
+
+        :return:
+            The 2x2 covariance matrix between the two vectors.
         """
         pass
 

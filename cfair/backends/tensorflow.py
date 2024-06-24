@@ -27,21 +27,29 @@ class TensorflowBackend(Backend):
         # noinspection PyUnresolvedReferences
         return v.numpy()
 
-    def stack(self, v: list, axis: Union[None, int, Iterable[int]] = None) -> Any:
+    def stack(self, v: list, axis: Union[int, Iterable[int]] = 0) -> Any:
         return self._backend.stack(v, axis=axis)
 
     def matmul(self, v, w) -> Any:
         v = self.reshape(v, shape=(1, -1)) if self.ndim(v) == 1 else v
         w = self.reshape(w, shape=(-1, 1)) if self.ndim(w) == 1 else w
-        s = self._backend.linalg.matmul(v, w)
-        return self.reshape(s, shape=-1)
+        return self._backend.squeeze(self._backend.linalg.matmul(v, w))
 
     def mean(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         return self._backend.math.reduce_mean(v, axis=axis)
 
+    def sum(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        return self._backend.math.reduce_sum(v, axis=axis)
+
+    def cov(self, v, w) -> Any:
+        inp = self.stack([v, w], axis=1)
+        inp = inp - self.mean(inp, axis=0)
+        return self.matmul(self._backend.transpose(inp), inp) / self.len(v)
+
     def var(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         return self._backend.math.reduce_variance(v, axis=axis)
 
+    # noinspection PyPep8Naming
     def lstsq(self, A, b) -> Any:
         # use fast=False to obtain more robust results
         b = self.reshape(b, shape=(-1, 1))

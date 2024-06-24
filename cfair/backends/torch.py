@@ -27,7 +27,7 @@ class TorchBackend(Backend):
         # noinspection PyUnresolvedReferences
         return v.detach().cpu().numpy()
 
-    def stack(self, v: list, axis: Union[None, int, Iterable[int]] = None) -> Any:
+    def stack(self, v: list, axis: Union[int, Iterable[int]] = 0) -> Any:
         kwargs = dict() if axis is None else dict(dim=axis)
         return self._backend.stack(v, **kwargs)
 
@@ -38,10 +38,19 @@ class TorchBackend(Backend):
         kwargs = dict() if axis is None else dict(dim=axis)
         return self._backend.mean(v, **kwargs)
 
+    def sum(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
+        kwargs = dict() if axis is None else dict(dim=axis)
+        return self._backend.sum(v, **kwargs)
+
+    def cov(self, v, w) -> Any:
+        inp = self.stack([v, w])
+        return self._backend.cov(inp, correction=0)
+
     def var(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         kwargs = dict() if axis is None else dict(dim=axis)
         return self._backend.var(v, unbiased=False, **kwargs)
 
+    # noinspection PyPep8Naming
     def lstsq(self, A, b) -> Any:
         # the 'gelsd' driver allows to have both more precise and more reproducible results
         return self._backend.linalg.lstsq(A, b, driver='gelsd')[0]

@@ -6,7 +6,7 @@ from cfair.backends import Backend, TensorflowBackend
 from test.backends.test_backend import TestBackend
 
 
-class TestTorchBackend(TestBackend):
+class TestTensorflowBackend(TestBackend):
 
     @property
     def backend(self) -> Backend:
