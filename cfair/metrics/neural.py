@@ -134,20 +134,30 @@ class NeuralHGR(CopulaMetric):
             metric=self
         )
 
+    class _DummyNetwork:
+        def __call__(self, x):
+            return x
+
+        @property
+        def trainable_weights(self) -> list:
+            return []
+
+    class _DummyOptimizer:
+        def zero_grad(self):
+            return
+
+        def step(self):
+            return
+
+        def apply_gradients(self, g):
+            return
+
     @staticmethod
     def _build_torch(units: Optional[Tuple[int]]) -> tuple:
         import torch
-
-        class DummyOptimizer:
-            def zero_grad(self):
-                return
-
-            def step(self):
-                return
-
         if units is None:
-            network = torch.nn.Sequential()
-            optimizer = DummyOptimizer()
+            network = NeuralHGR._DummyNetwork()
+            optimizer = NeuralHGR._DummyOptimizer()
         else:
             layers = []
             for inp, out in zip([1, *units], [*units, 1]):
@@ -170,12 +180,13 @@ class NeuralHGR(CopulaMetric):
     def _build_tensorflow(units: Optional[Tuple[int]]) -> tuple:
         import tensorflow as tf
         if units is None:
-            layers = []
+            network = NeuralHGR._DummyNetwork()
+            optimizer = NeuralHGR._DummyOptimizer()
         else:
             layers = [tf.keras.layers.Dense(out, activation='relu') for out in units]
             layers = [*layers, tf.keras.layers.Dense(1)]
-        network = tf.keras.Sequential(layers)
-        optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005)
+            network = tf.keras.Sequential(layers)
+            optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005)
         return network, optimizer
 
     def _train_tensorflow(self, a, b) -> Any:
