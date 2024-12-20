@@ -4,25 +4,26 @@ Grari, Sylvain Lamprier and Marcin Detyniecki. The code has been partially taken
 containing the code of the paper: https://github.com/fairml-research/HGR_NN/tree/main.
 """
 import importlib.util
+from abc import ABC
 from typing import Any, Union, Iterable, Optional, Tuple, Callable
 
 from cfair.backends import Backend, NumpyBackend, TorchBackend, TensorflowBackend
-from cfair.metrics.metric import CopulaMetric
+from cfair.indicators.indicator import CopulaIndicator, HGRIndicator, GeDIIndicator, NLCIndicator
 
 
-class NeuralHGR(CopulaMetric):
-    """HGR indicator computed using two neural networks to approximate the copula transformations."""
+class NeuralIndicator(CopulaIndicator, ABC):
+    """Fairness indicator computed using two neural networks to approximate the copula transformations."""
 
     def __init__(self,
-                 backend: Union[str, Backend] = 'numpy',
                  f_units: Optional[Iterable[int]] = (16, 16, 8),
                  g_units: Optional[Iterable[int]] = (16, 16, 8),
+                 backend: Union[str, Backend] = 'numpy',
                  epochs_start: int = 1000,
                  epochs_successive: Optional[int] = 50,
                  eps: float = 1e-9):
         """
         :param backend:
-            The backend to use to compute the metric, or its alias.
+            The backend to use to compute the indicator, or its alias.
 
         :param f_units:
             The hidden units of the F copula network, or None for no F copula network.
@@ -40,7 +41,7 @@ class NeuralHGR(CopulaMetric):
             The epsilon value used to avoid division by zero in case of null standard deviation.
         """
         assert f_units is not None or g_units is not None, "Either f_units or g_units must not be None"
-        super(NeuralHGR, self).__init__(backend=backend)
+        super(NeuralIndicator, self).__init__(backend=backend, eps=eps)
         # use default backend if it has a neural engine, otherwise prioritize torch and then tensorflow
         if isinstance(self.backend, TensorflowBackend):
             build_fn = self._build_tensorflow
@@ -62,13 +63,12 @@ class NeuralHGR(CopulaMetric):
         else:
             raise AssertionError(f"Unsupported backend f'{self.backend}")
 
-        self._eps: float = eps
         self._unitsF: Optional[Tuple[int]] = None if f_units is None else tuple(f_units)
         self._unitsG: Optional[Tuple[int]] = None if g_units is None else tuple(g_units)
         self._epochs_start: int = epochs_start
         self._epochs_successive: int = epochs_successive
         self._neural_backend: Backend = neural_backend
-        self._train_fn: Callable = train_fn
+        self._train_fn: Callable[[Any, Any], None] = train_fn
         self._netF, self._optF = build_fn(units=self.f_units)
         self._netG, self._optG = build_fn(units=self.g_units)
 
@@ -92,46 +92,37 @@ class NeuralHGR(CopulaMetric):
         """The number of training epochs in the subsequent calls (fine-tuning of the pre-trained networks)."""
         return self._epochs_successive
 
-    @property
-    def eps(self) -> float:
-        """The epsilon value used to avoid division by zero in case of null standard deviation."""
-        return self._eps
-
-    def _indicator(self, a, b) -> Any:
-        fa = self._neural_backend.standardize(self._netF(a), eps=self.eps)
-        gb = self._neural_backend.standardize(self._netG(b), eps=self.eps)
-        return self._neural_backend.mean(fa * gb)
-
     def _f(self, a) -> Any:
         a = self._neural_backend.cast(a, dtype=float)
         a = self._neural_backend.reshape(a, shape=(-1, 1))
         fa = self._netF(a)
         fa = self._neural_backend.reshape(fa, shape=-1)
-        return self._neural_backend.numpy(fa) if self._backend is NumpyBackend() else fa
+        return self._neural_backend.numpy(fa) if isinstance(self.backend, NumpyBackend) else fa
 
     def _g(self, b) -> Any:
         b = self._neural_backend.cast(b, dtype=float)
         b = self._neural_backend.reshape(b, shape=(-1, 1))
         gb = self._netG(b)
         gb = self._neural_backend.reshape(gb, shape=-1)
-        return self._neural_backend.numpy(gb) if self._backend is NumpyBackend() else gb
+        return self._neural_backend.numpy(gb) if isinstance(self.backend, NumpyBackend) else gb
 
-    def _compute(self, a, b) -> CopulaMetric.Result:
-        value = None
+    def _compute(self, a, b) -> CopulaIndicator.Result:
         # cast the vectors to the neural backend type
         a_cast = self._neural_backend.reshape(self._neural_backend.cast(a, dtype=float), shape=(-1, 1))
         b_cast = self._neural_backend.reshape(self._neural_backend.cast(b, dtype=float), shape=(-1, 1))
         for _ in range(self._epochs_start if self.num_calls == 0 else self._epochs_successive):
-            value = self._train_fn(a_cast, b_cast)
-        value = self._neural_backend.abs(value)
-        if self.backend is NumpyBackend():
-            value = self._neural_backend.numpy(value).item()
-        return NeuralHGR.Result(
+            self._train_fn(a_cast, b_cast)
+        # compute the indicator value as the absolute value of the (mean) vector product
+        # (since vectors are standardized) multiplied by the scaling factor
+        value = self._hgr(a=a_cast, b=b_cast) * self._factor(a=a, b=b)
+        value = self._neural_backend.item(value) if isinstance(self.backend, NumpyBackend) else value
+        # return the result instance
+        return NeuralIndicator.Result(
             a=a,
             b=b,
             value=value,
             num_call=self.num_calls,
-            metric=self
+            indicator=self
         )
 
     class _DummyNetwork:
@@ -152,12 +143,17 @@ class NeuralHGR(CopulaMetric):
         def apply_gradients(self, g):
             return
 
+    def _hgr(self, a, b) -> Any:
+        fa = self._neural_backend.standardize(self._netF(a), eps=self.eps)
+        gb = self._neural_backend.standardize(self._netG(b), eps=self.eps)
+        return self._neural_backend.mean(fa * gb)
+
     @staticmethod
     def _build_torch(units: Optional[Tuple[int]]) -> tuple:
         import torch
         if units is None:
-            network = NeuralHGR._DummyNetwork()
-            optimizer = NeuralHGR._DummyOptimizer()
+            network = NeuralIndicator._DummyNetwork()
+            optimizer = NeuralIndicator._DummyOptimizer()
         else:
             layers = []
             for inp, out in zip([1, *units], [*units, 1]):
@@ -166,22 +162,20 @@ class NeuralHGR(CopulaMetric):
             optimizer = torch.optim.Adam(network.parameters(), lr=0.0005)
         return network, optimizer
 
-    def _train_torch(self, a, b) -> Any:
+    def _train_torch(self, a, b) -> None:
         self._optF.zero_grad()
         self._optG.zero_grad()
-        metric = self._indicator(a, b)
-        loss = -metric
+        loss = -self._hgr(a, b)
         loss.backward()
         self._optF.step()
         self._optG.step()
-        return metric
 
     @staticmethod
     def _build_tensorflow(units: Optional[Tuple[int]]) -> tuple:
         import tensorflow as tf
         if units is None:
-            network = NeuralHGR._DummyNetwork()
-            optimizer = NeuralHGR._DummyOptimizer()
+            network = NeuralIndicator._DummyNetwork()
+            optimizer = NeuralIndicator._DummyOptimizer()
         else:
             layers = [tf.keras.layers.Dense(out, activation='relu') for out in units]
             layers = [*layers, tf.keras.layers.Dense(1)]
@@ -189,13 +183,26 @@ class NeuralHGR(CopulaMetric):
             optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005)
         return network, optimizer
 
-    def _train_tensorflow(self, a, b) -> Any:
+    def _train_tensorflow(self, a, b) -> None:
         import tensorflow as tf
         with tf.GradientTape(persistent=True) as tape:
-            metric = self._indicator(a, b)
-            loss = -metric
+            loss = -self._hgr(a, b)
         f_grads = tape.gradient(loss, self._netF.trainable_weights)
         g_grads = tape.gradient(loss, self._netG.trainable_weights)
         self._optF.apply_gradients(zip(f_grads, self._netF.trainable_weights))
         self._optG.apply_gradients(zip(g_grads, self._netG.trainable_weights))
-        return metric
+
+
+class NeuralHGR(NeuralIndicator, HGRIndicator):
+    """Hirschfield-Gebelin-Renyi coefficient using two neural networks to approximate the copula transformations."""
+    pass
+
+
+class NeuralGeDI(NeuralIndicator, GeDIIndicator):
+    """Generalized Disparate Impact using two neural networks to approximate the copula transformations."""
+    pass
+
+
+class NeuralNLC(NeuralIndicator, NLCIndicator):
+    """Non-Linear Covariance computed two neural networks to approximate the copula transformations."""
+    pass

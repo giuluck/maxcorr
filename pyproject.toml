@@ -32,7 +32,7 @@ torch = [
     'torch >= 1.12'
 ]
 tensorflow = [
-    'tensorflow >= 2.9'
+    'tensorflow >= 2.13'
 ]
 
 [tool.hatch.build.targets.wheel]

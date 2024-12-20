@@ -23,6 +23,9 @@ class NumpyBackend(Backend):
     def cast(self, v, dtype=None) -> Any:
         return self._backend.array(v, dtype=dtype)
 
+    def item(self, v) -> float:
+        return float(v.item())
+
     def numpy(self, v, dtype=None) -> np.ndarray:
         return v
 

@@ -23,6 +23,9 @@ class TorchBackend(Backend):
         # if the vector is already a torch tensor, simply change the dtype to avoid warnings
         return v.to(dtype=dtype) if self.comply(v) else self._backend.tensor(v, dtype=dtype)
 
+    def item(self, v) -> float:
+        return float(v.item())
+
     def numpy(self, v, dtype=None) -> np.ndarray:
         # noinspection PyUnresolvedReferences
         return v.detach().cpu().numpy()

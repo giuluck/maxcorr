@@ -9,26 +9,27 @@ reworked from the repositories containing the code of the paper, respectively:
 
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from typing import Tuple, Optional, List, Any, Union, Callable, final
+from typing import Tuple, Optional, List, Any, Union, Callable
 
 import numpy as np
 import scipy
+from scipy.optimize import NonlinearConstraint, minimize
 
 from cfair.backends import Backend
-from cfair.metrics.metric import CopulaMetric
+from cfair.indicators.indicator import CopulaIndicator, HGRIndicator, GeDIIndicator, NLCIndicator
 
 
-class KernelBasedMetric(CopulaMetric):
-    """Kernel-based metric computed using user-defined kernels to approximate the copula transformations."""
+class KernelBasedIndicator(CopulaIndicator):
+    """Kernel-based indicator computed using user-defined kernels to approximate the copula transformations."""
 
-    @dataclass(frozen=True, init=True, repr=False, eq=False, unsafe_hash=None)
-    class Result(CopulaMetric.Result):
-        """Data class representing the results of a KernelBasedMetric computation."""
+    @dataclass(frozen=True, init=True, repr=False, eq=False)
+    class Result(CopulaIndicator.Result):
+        """Data class representing the results of a KernelBasedIndicator computation."""
 
-        alpha: np.ndarray = field()
+        alpha: List[float] = field()
         """The coefficient vector for the f copula transformation."""
 
-        beta: np.ndarray = field()
+        beta: List[float] = field()
         """The coefficient vector for the f copula transformation."""
 
     def __init__(self,
@@ -41,7 +42,7 @@ class KernelBasedMetric(CopulaMetric):
                  delta_independent: Optional[float]):
         """
         :param backend:
-            The backend to use to compute the metric, or its alias.
+            The backend to use to compute the indicator, or its alias.
 
         :param method:
             The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
@@ -61,10 +62,9 @@ class KernelBasedMetric(CopulaMetric):
         :param delta_independent:
             A delta value used to select linearly dependent columns and remove them, or None to avoid this step.
         """
-        super(KernelBasedMetric, self).__init__(backend=backend)
+        super(KernelBasedIndicator, self).__init__(backend=backend, eps=eps)
         self._method: str = method
         self._maxiter: int = maxiter
-        self._eps: float = eps
         self._tol: float = tol
         self._use_lstsq: bool = use_lstsq
         self._delta_independent: Optional[float] = delta_independent
@@ -80,6 +80,23 @@ class KernelBasedMetric(CopulaMetric):
         pass
 
     @property
+    def last_result(self) -> Optional[Result]:
+        # override method to change output type to KernelBasedIndicator.Result
+        return super(KernelBasedIndicator, self).last_result
+
+    @property
+    def alpha(self) -> List[float]:
+        """The alpha vector computed in the last execution."""
+        assert self.last_result is not None, "The indicator has not been computed yet, no transformation can be used."
+        return self.last_result.alpha
+
+    @property
+    def beta(self) -> List[float]:
+        """The beta vector computed in the last execution."""
+        assert self.last_result is not None, "The indicator has not been computed yet, no transformation can be used."
+        return self.last_result.beta
+
+    @property
     def method(self) -> str:
         """The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'."""
         return self._method
@@ -88,11 +105,6 @@ class KernelBasedMetric(CopulaMetric):
     def maxiter(self) -> int:
         """The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize."""
         return self._maxiter
-
-    @property
-    def eps(self) -> float:
-        """The epsilon value used to avoid division by zero in case of null standard deviation."""
-        return self._eps
 
     @property
     def tol(self) -> float:
@@ -109,21 +121,18 @@ class KernelBasedMetric(CopulaMetric):
         """A delta value used to select linearly dependent columns and remove them, or None to avoid this step."""
         return self._delta_independent
 
-    @final
     def _f(self, a) -> Any:
         kernel = self.backend.stack(self.kernel_a(a), axis=1)
         # noinspection PyUnresolvedReferences
         alpha = self.backend.cast(self.last_result.alpha)
         return self.backend.matmul(kernel, alpha)
 
-    @final
     def _g(self, b) -> Any:
         kernel = self.backend.stack(self.kernel_b(b), axis=1)
         # noinspection PyUnresolvedReferences
         beta = self.backend.cast(self.last_result.beta)
         return self.backend.matmul(kernel, beta)
 
-    @final
     def _indices(self, f: list, g: list) -> Tuple[Tuple[list, List[int]], Tuple[list, List[int]]]:
         def independent(m):
             # add the bias to the matrix
@@ -183,53 +192,126 @@ class KernelBasedMetric(CopulaMetric):
                 g_columns.append(g[idx])
         return (f_columns, f_indices), (g_columns, g_indices)
 
-    @final
     def _result(self, a, b, kernel_a: bool, kernel_b: bool, a0: Optional, b0: Optional) -> Result:
         # build the kernel matrices, compute their original degrees, and get the linearly independent indices
         f = self.kernel_a(a) if kernel_a else [a]
         g = self.kernel_b(b) if kernel_b else [b]
-        degree_a, degree_b = len(f), len(g)
-        (f, f_indices), (g, g_indices) = self._indices(f=f, g=g)
-        # compute the original degrees of the matrices
-        f = self.backend.stack(f, axis=1)
-        f = f - self.backend.mean(f, axis=0)
-        g = self.backend.stack(g, axis=1)
-        g = g - self.backend.mean(g, axis=0)
-        # compute the indicator value and the coefficients using the slim matrices
-        val, alp, bet = self._indicator(
-            f=f,
-            g=g,
-            a0=None if a0 is None else a0[f_indices],
-            b0=None if b0 is None else b0[g_indices]
-        )
-        # reconstruct alpha and beta by adding zeros for the ignored indices
-        alpha = np.zeros(degree_a)
-        alpha[f_indices] = alp
-        beta = np.zeros(degree_b)
-        beta[g_indices] = bet
-        # return the result instance
-        return KernelBasedMetric.Result(
+        (f_slim, f_indices), (g_slim, g_indices) = self._indices(f=f, g=g)
+        # compute the slim matrices and the respective degrees
+        f_slim = self.backend.stack(f_slim, axis=1)
+        f_slim = f_slim - self.backend.mean(f_slim, axis=0)
+        g_slim = self.backend.stack(g_slim, axis=1)
+        g_slim = g_slim - self.backend.mean(g_slim, axis=0)
+        degree_a, degree_b = len(f_indices), len(g_indices)
+        # compute the indicator value and the coefficients alpha and beta using the slim matrices
+        # handle trivial or simpler cases:
+        #  - if both degrees are 1 there is no additional computation involved
+        #  - if one degree is 1, center/standardize that vector and compute the other's coefficients using lstsq
+        #  - if no degree is 1, use the nonlinear lstsq optimization routine via scipy.optimize
+        alpha = self.backend.ones(1, dtype=self.backend.dtype(f_slim))
+        beta = self.backend.ones(1, dtype=self.backend.dtype(g_slim))
+        alpha_numpy, beta_numpy = np.ones(1), np.ones(1)
+        if degree_a == 1 and degree_b == 1:
+            pass
+        elif degree_a == 1 and self.use_lstsq:
+            f_slim = self.backend.standardize(f_slim, eps=self.eps)
+            beta = self.backend.lstsq(A=g_slim, b=self.backend.reshape(f_slim, shape=-1))
+            beta_numpy = self.backend.numpy(beta)
+        elif degree_b == 1 and self.use_lstsq:
+            g_slim = self.backend.standardize(g_slim, eps=self.eps)
+            alpha = self.backend.lstsq(A=f_slim, b=self.backend.reshape(g_slim, shape=-1))
+            alpha_numpy = self.backend.numpy(alpha)
+        else:
+            n = len(a)
+            f_numpy = self.backend.numpy(f_slim)
+            g_numpy = self.backend.numpy(g_slim)
+            fg_numpy = np.concatenate((f_slim, -g_slim), axis=1)
+
+            # define the function to optimize as the least square problem:
+            #   - func:   || F @ alpha - G @ beta ||_2^2 =
+            #           =   (F @ alpha - G @ beta) @ (F @ alpha - G @ beta)
+            #   - grad:   [ 2 * F.T @ (F @ alpha - G @ beta) | -2 * G.T @ (F @ alpha - G @ beta) ] =
+            #           =   2 * [F | -G].T @ (F @ alpha - G @ beta)
+            #   - hess:   [  2 * F.T @ F | -2 * F.T @ G ]
+            #             [ -2 * G.T @ F |  2 * G.T @ G ] =
+            #           =    2 * [F  -G].T @ [F  -G]
+            def _fun(inp):
+                alp, bet = inp[:degree_a], inp[degree_a:]
+                diff_numpy = f_numpy @ alp - g_numpy @ bet
+                obj_func = diff_numpy @ diff_numpy
+                obj_grad = 2 * fg_numpy.T @ diff_numpy
+                return obj_func, obj_grad
+
+            # define the constraint
+            #   - func:   var(G @ beta) --> = 1
+            #   - grad: [ 0 | 2 * G.T @ G @ beta / n ]
+            #   - hess: [ 0 |         0       ]
+            #           [ 0 | 2 * G.T @ G / n ]
+            cst_hess = np.zeros(shape=(degree_a + degree_b, degree_a + degree_b), dtype=float)
+            cst_hess[degree_a:, degree_a:] = 2 * g_numpy.T @ g_numpy / n
+            constraint = NonlinearConstraint(
+                fun=lambda inp: np.var(g_numpy @ inp[degree_a:], ddof=0),
+                jac=lambda inp: np.concatenate(([0] * degree_a, 2 * g_numpy.T @ g_numpy @ inp[degree_a:] / n)),
+                hess=lambda *_: cst_hess,
+                lb=1,
+                ub=1
+            )
+            # if no guess is provided, set the initial point as [ 1 / std(F @ 1) | 1 / std(G @ 1) ] then solve
+            if a0 is None:
+                a0 = np.ones(degree_a) / np.sqrt(f_numpy.sum(axis=1).var(ddof=0) + self.eps)
+            else:
+                a0 = np.array(a0)[f_indices]
+            if b0 is None:
+                b0 = np.ones(degree_b) / np.sqrt(g_numpy.sum(axis=1).var(ddof=0) + self.eps)
+            else:
+                b0 = np.array(b0)[g_indices]
+            x0 = np.concatenate((a0, b0))
+            # noinspection PyTypeChecker
+            s = minimize(
+                _fun,
+                jac=True,
+                hess=lambda *_: 2 * fg_numpy.T @ fg_numpy,
+                x0=x0,
+                constraints=[constraint],
+                method=self.method,
+                tol=self.tol,
+                options={'maxiter': self.maxiter}
+            )
+            alpha_numpy = s.x[:degree_a]
+            beta_numpy = s.x[degree_a:]
+            alpha = self.backend.cast(alpha_numpy, dtype=self.backend.dtype(f_slim))
+            beta = self.backend.cast(beta_numpy, dtype=self.backend.dtype(g_slim))
+        # compute the indicator value as the absolute value of the (mean) vector product
+        # (since vectors are standardized) multiplied by the scaling factor
+        fa = self.backend.standardize(self.backend.matmul(f_slim, alpha), eps=self.eps)
+        gb = self.backend.standardize(self.backend.matmul(g_slim, beta), eps=self.eps)
+        value = self.backend.mean(fa * gb) * self._factor(a=a, b=b)
+        # reconstruct alpha and beta by adding zeros for the ignored indices, and normalize for ease of comparison
+        alpha_full = np.zeros(len(f))
+        alpha_full[f_indices] = alpha_numpy
+        alpha_full = alpha_full / np.abs(alpha_full).sum()
+        beta_full = np.zeros(len(g))
+        beta_full[g_indices] = beta_numpy
+        beta_full = beta_full / np.abs(beta_full).sum()
+        # return the result instance, converting alpha and beta to lists of floats
+        return KernelBasedIndicator.Result(
             a=a,
             b=b,
-            value=val,
+            value=value,
             num_call=self.num_calls,
-            metric=self,
-            alpha=alpha,
-            beta=beta,
+            indicator=self,
+            alpha=[float(v) for v in alpha_full],
+            beta=[float(v) for v in beta_full],
         )
 
-    @abstractmethod
-    def _indicator(self, f, g, a0: Optional, b0: Optional) -> Tuple[Any, np.ndarray, np.ndarray]:
-        pass
 
-
-class DoubleKernelMetric(KernelBasedMetric, ABC):
-    """Kernel-based metric computed using two different explicit kernels for the variables."""
+class DoubleKernelIndicator(KernelBasedIndicator, ABC):
+    """Kernel-based indicator computed using two different explicit kernels for the variables."""
 
     def __init__(self,
-                 backend: Union[str, Backend] = 'numpy',
                  kernel_a: Union[int, Callable[[Any], list]] = 3,
                  kernel_b: Union[int, Callable[[Any], list]] = 3,
+                 backend: Union[str, Backend] = 'numpy',
                  method: str = 'trust-constr',
                  maxiter: int = 1000,
                  eps: float = 1e-9,
@@ -238,7 +320,7 @@ class DoubleKernelMetric(KernelBasedMetric, ABC):
                  delta_independent: Optional[float] = None):
         """
         :param backend:
-            The backend to use to compute the metric, or its alias.
+            The backend to use to compute the indicator, or its alias.
 
         :param kernel_a:
             Either a callable f(a) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
@@ -264,7 +346,7 @@ class DoubleKernelMetric(KernelBasedMetric, ABC):
         :param delta_independent:
             A delta value used to select linearly dependent columns and remove them, or None to avoid this step.
         """
-        super(DoubleKernelMetric, self).__init__(
+        super(DoubleKernelIndicator, self).__init__(
             backend=backend,
             method=method,
             maxiter=maxiter,
@@ -290,18 +372,18 @@ class DoubleKernelMetric(KernelBasedMetric, ABC):
     def kernel_b(self, b) -> list:
         return self._kernel_b(b)
 
-    def _compute(self, a, b) -> KernelBasedMetric.Result:
+    def _compute(self, a, b) -> KernelBasedIndicator.Result:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
         return self._result(a=a, b=b, kernel_a=True, kernel_b=True, a0=a0, b0=b0)
 
 
-class SingleKernelMetric(KernelBasedMetric, ABC):
-    """Kernel-based metric computed using a single kernel for the variables, then taking the maximal value."""
+class SingleKernelIndicator(KernelBasedIndicator, ABC):
+    """Kernel-based indicator computed using a single kernel for the variables, then taking the maximal value."""
 
     def __init__(self,
-                 backend: Union[str, Backend] = 'numpy',
                  kernel: Union[int, Callable[[Any], list]] = 3,
+                 backend: Union[str, Backend] = 'numpy',
                  method: str = 'trust-constr',
                  maxiter: int = 1000,
                  eps: float = 1e-9,
@@ -310,7 +392,7 @@ class SingleKernelMetric(KernelBasedMetric, ABC):
                  delta_independent: Optional[float] = None):
         """
         :param backend:
-            The backend to use to compute the metric, or its alias.
+            The backend to use to compute the indicator, or its alias.
 
         :param kernel:
             Either a callable k(x) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
@@ -333,7 +415,7 @@ class SingleKernelMetric(KernelBasedMetric, ABC):
         :param delta_independent:
             A delta value used to select linearly dependent columns and remove them, or None to avoid this step.
         """
-        super(SingleKernelMetric, self).__init__(
+        super(SingleKernelIndicator, self).__init__(
             backend=backend,
             method=method,
             maxiter=maxiter,
@@ -359,7 +441,7 @@ class SingleKernelMetric(KernelBasedMetric, ABC):
     def kernel_b(self, b) -> list:
         return self.kernel(b)
 
-    def _compute(self, a, b) -> KernelBasedMetric.Result:
+    def _compute(self, a, b) -> KernelBasedIndicator.Result:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
         res_a = self._result(a=a, b=b, kernel_a=True, kernel_b=False, a0=a0, b0=None)
@@ -376,12 +458,92 @@ class SingleKernelMetric(KernelBasedMetric, ABC):
             beta = res_b.beta
             degree = len(beta)
             alpha = np.concatenate((res_b.alpha, np.zeros(degree - 1)))
-        return KernelBasedMetric.Result(
+        return KernelBasedIndicator.Result(
             a=a,
             b=b,
             value=value,
             num_call=self.num_calls,
-            metric=self,
+            indicator=self,
             alpha=alpha,
             beta=beta,
         )
+
+
+class DoubleKernelHGR(DoubleKernelIndicator, HGRIndicator):
+    """Hirschfield-Gebelin-Renyi coefficient using two user-defined kernels as the copula transformations."""
+    pass
+
+
+class SingleKernelHGR(SingleKernelIndicator, HGRIndicator):
+    """Hirschfield-Gebelin-Renyi coefficient using a single user-defined kernel as the copula transformation."""
+    pass
+
+
+class DoubleKernelGeDI(DoubleKernelIndicator, GeDIIndicator):
+    """Generalized Disparate Impact using two user-defined kernels as the copula transformations."""
+
+    # default value is to have the kernel on the first vector only
+    def __init__(self,
+                 kernel_a: Union[int, Callable[[Any], list]] = 3,
+                 kernel_b: Union[int, Callable[[Any], list]] = 1,
+                 backend: Union[str, Backend] = 'numpy',
+                 method: str = 'trust-constr',
+                 maxiter: int = 1000,
+                 eps: float = 1e-9,
+                 tol: float = 1e-9,
+                 use_lstsq: bool = True,
+                 delta_independent: Optional[float] = None):
+        """
+        :param backend:
+            The backend to use to compute the indicator, or its alias.
+
+        :param kernel_a:
+            Either a callable f(a) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
+
+        :param kernel_b:
+            Either a callable g(b) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
+
+        :param method:
+            The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
+
+        :param maxiter:
+            The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize.
+
+        :param eps:
+            The epsilon value used to avoid division by zero in case of null standard deviation.
+
+        :param tol:
+            The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize.
+
+        :param use_lstsq:
+            Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1.
+
+        :param delta_independent:
+            A delta value used to select linearly dependent columns and remove them, or None to avoid this step.
+        """
+        super(DoubleKernelGeDI, self).__init__(
+            backend=backend,
+            kernel_a=kernel_a,
+            kernel_b=kernel_b,
+            method=method,
+            maxiter=maxiter,
+            eps=eps,
+            tol=tol,
+            use_lstsq=use_lstsq,
+            delta_independent=delta_independent
+        )
+
+
+class SingleKernelGeDI(SingleKernelIndicator, GeDIIndicator):
+    """Generalized Disparate Impact using a single user-defined kernel as the copula transformation."""
+    pass
+
+
+class DoubleKernelNLC(DoubleKernelIndicator, NLCIndicator):
+    """Non-Linear Covariance using two user-defined kernels as the copula transformations."""
+    pass
+
+
+class SingleKernelNLC(SingleKernelIndicator, NLCIndicator):
+    """Non-Linear Covariance using a single user-defined kernel as the copula transformation."""
+    pass

@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Tuple, final, Any, Type, Iterable, Union, Optional
+from typing import Tuple, Any, Type, Iterable, Union, Optional
 
 import numpy as np
 
@@ -39,7 +39,6 @@ class Backend:
         """The type of data handled by the backend."""
         pass
 
-    @final
     def comply(self, v) -> bool:
         """Checks whether a vector complies with the backend (e.g., a numpy array for NumpyBackend).
 
@@ -67,6 +66,18 @@ class Backend:
         pass
 
     @abstractmethod
+    def item(self, v) -> float:
+        """Returns the unique element of a vector as a floating point value.
+
+        :param v:
+            The input vector.
+
+        :return:
+            The unique element of the vector.
+        """
+        pass
+
+    @abstractmethod
     def numpy(self, v, dtype=None) -> np.ndarray:
         """Casts the vector to a numpy vector.
 
@@ -81,7 +92,6 @@ class Backend:
         """
         pass
 
-    @final
     def list(self, v) -> list:
         """Casts the vector to a list.
 
@@ -93,7 +103,6 @@ class Backend:
         """
         return self.numpy(v).tolist()
 
-    @final
     def vector(self, v: list, dtype=None) -> Any:
         """Creates a vector from an input list.
 
@@ -108,7 +117,6 @@ class Backend:
         """
         return self.cast(v, dtype=dtype)
 
-    @final
     def zeros(self, length: int, dtype=None) -> Any:
         """Creates a vector of zeros with the given length and dtype.
 
@@ -123,7 +131,6 @@ class Backend:
         """
         return self.vector([0] * length, dtype=dtype)
 
-    @final
     def ones(self, length: int, dtype=None) -> Any:
         """Creates a vector of ones with the given length and dtype.
 
@@ -177,7 +184,6 @@ class Backend:
         """
         return tuple(v.shape)
 
-    @final
     def ndim(self, v) -> int:
         """Gets the number of dimensions of the vector.
 
@@ -189,7 +195,6 @@ class Backend:
         """
         return len(self.shape(v))
 
-    @final
     def len(self, v) -> int:
         """Gets the length of the vector on the first dimension.
 
@@ -338,7 +343,6 @@ class Backend:
         """
         pass
 
-    @final
     def std(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         """Computes the standard deviation of the vector.
 
@@ -353,7 +357,17 @@ class Backend:
         """
         return self.sqrt(self.var(v, axis=axis))
 
-    @final
+    def center(self, v) -> Any:
+        """Centers a vector on zero.
+
+        :param v:
+            The input vector.
+
+        :return:
+            The centered vector.
+        """
+        return v - self.mean(v)
+
     def standardize(self, v, eps: float = 1e-9) -> Any:
         """Standardizes a vector.
 
@@ -366,7 +380,7 @@ class Backend:
         :return:
             The standardized vector.
         """
-        return (v - self.mean(v)) / self.sqrt(self.var(v) + eps)
+        return self.center(v) / self.sqrt(self.var(v) + eps)
 
     # noinspection PyPep8Naming
     @abstractmethod

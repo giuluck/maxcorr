@@ -23,6 +23,9 @@ class TensorflowBackend(Backend):
         # if the vector is already a tf tensor, simply change the dtype to avoid warnings
         return self._backend.cast(v, dtype=dtype) if self.comply(v) else self._backend.constant(v, dtype=dtype)
 
+    def item(self, v) -> float:
+        return float(v.numpy().item())
+
     def numpy(self, v, dtype=None) -> np.ndarray:
         # noinspection PyUnresolvedReferences
         return v.numpy()

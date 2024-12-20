@@ -1,52 +1,50 @@
 import unittest
 from abc import abstractmethod
-from typing import final, Type, List
+from typing import Type, List
 
 import numpy as np
 import pytest
 
 from cfair.backends import Backend, NumpyBackend, TensorflowBackend, TorchBackend
-from cfair.metrics.metric import Metric
+from cfair.indicators.indicator import Indicator
 
 
-class TestMetric(unittest.TestCase):
+class TestIndicator(unittest.TestCase):
     RUNS: int = 5
 
     LENGTH: int = 10
 
     BACKENDS: List[Backend] = [TensorflowBackend(), TorchBackend(), NumpyBackend()]
 
-    # noinspection PyUnusedLocal
+    # noinspection PyTypeChecker
     @abstractmethod
-    def metrics(self, backend: str) -> List[Metric]:
+    def indicators(self, backend: str) -> List[Indicator]:
         pytest.skip(reason="Abstract Test Class")
 
+    # noinspection PyTypeChecker
     @property
     @abstractmethod
     def result_type(self) -> Type:
         pytest.skip(reason="Abstract Test Class")
 
-    @final
     def vectors(self, *seeds: int, backend: Backend) -> list:
         return [backend.cast(v=np.random.default_rng(seed=s).normal(size=self.LENGTH), dtype=float) for s in seeds]
 
-    @final
     def test_value(self) -> None:
         # perform a simple sanity check on the stored result
         for bk in self.BACKENDS:
             vec1, vec2 = self.vectors(0, 1, backend=bk)
-            for mt in self.metrics(backend=bk.name):
+            for mt in self.indicators(backend=bk.name):
                 self.assertEqual(
-                    mt.value(a=vec1, b=vec2),
+                    mt.compute(a=vec1, b=vec2),
                     mt.last_result.value,
                     msg=f"Inconsistent return between 'value' method and result instance on {bk}"
                 )
 
-    @final
     def test_result(self) -> None:
         for bk in self.BACKENDS:
             vec1, vec2 = self.vectors(0, 1, backend=bk)
-            for mt in self.metrics(backend=bk.name):
+            for mt in self.indicators(backend=bk.name):
                 result = mt(a=vec1, b=vec2)
                 self.assertIsInstance(result, self.result_type, msg=f"Wrong result class type from 'call' on {bk}")
                 self.assertEqual(result, mt.last_result, msg=f"Wrong result stored or yielded from 'call' on {bk}")
@@ -67,12 +65,11 @@ class TestMetric(unittest.TestCase):
                     msg=f"Wrong value type from result instance on {bk}"
                 )
                 self.assertEqual(result.num_call, 1, msg=f"Wrong number of calls stored in result instance on {bk}")
-                self.assertEqual(mt, result.metric, msg=f"Wrong metric instance stored in result instance on {bk}")
+                self.assertEqual(mt, result.indicator, msg=f"Wrong indicator stored in result instance on {bk}")
 
-    @final
     def test_state(self) -> None:
         for bk in self.BACKENDS:
-            for mt in self.metrics(backend=bk.name):
+            for mt in self.indicators(backend=bk.name):
                 self.assertIsNone(mt.last_result, msg=f"Wrong initial last result on {bk}")
                 self.assertEqual(mt.num_calls, 0, msg=f"Wrong initial number of calls stored on {bk}")
                 results = []
