@@ -13,7 +13,7 @@ requires-python = '>=3.9'
 dependencies = [
     'numpy >= 1.24, < 2',
     'pandas >= 1.4',
-    'scikit-learn >= 1.5',
+    'scikit-learn >= 1.6',
     'scipy >= 1.10'
 ]
 description = 'cFair: A Package for Fairness with Continuous Attributes'
@@ -29,10 +29,11 @@ license = { file = "LICENSE" }
 
 [project.optional-dependencies]
 torch = [
-    'torch >= 2.2'
+    'torch >= 2.5.1'
 ]
 tensorflow = [
-    'tensorflow >= 2.14'
+    'tensorflow >= 2.14; platform_system != "Darwin"',
+    'tensorflow-macos >= 2.14; platform_system == "Darwin"'
 ]
 
 [tool.hatch.build.targets.wheel]
