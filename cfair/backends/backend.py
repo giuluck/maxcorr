@@ -3,6 +3,8 @@ from typing import Tuple, Any, Type, Iterable, Union, Optional
 
 import numpy as np
 
+from cfair.typing import BackendType
+
 
 class Backend:
     """A singleton object representing a backend for vector operations. Apart from 'comply' and 'cast', all other
@@ -29,8 +31,9 @@ class Backend:
         return self is other
 
     @property
-    def name(self) -> str:
+    def name(self) -> BackendType:
         """An alias for the backend."""
+        # noinspection PyTypeChecker
         return self.__class__.__name__.replace('Backend', '').lower()
 
     @property

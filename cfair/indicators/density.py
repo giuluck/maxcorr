@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from math import pi, sqrt
 
-from cfair.backends import Backend, TensorflowBackend, NumpyBackend, TorchBackend
+from cfair.backends import Backend, TorchBackend
 from cfair.indicators.indicator import Indicator
 from cfair.typing import BackendType, SemanticsType
 
@@ -51,13 +51,13 @@ class DensityIndicator(Indicator, ABC):
         return self._damping
 
     def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
-        method = DensityIndicator.chi_2 if self._chi_square else DensityIndicator.hgr
+        method = DensityIndicator.chi_2 if self.chi_square else DensityIndicator.hgr
         if isinstance(self.backend, TorchBackend):
-            value = method(X=a, Y=b, density=DensityIndicator.kde, damping=self._damping)
+            value = method(X=a, Y=b, density=DensityIndicator.kde, damping=self.damping)
         else:
             a = torch.tensor(self.backend.numpy(a), dtype=torch.float)
             b = torch.tensor(self.backend.numpy(b), dtype=torch.float)
-            value = method(X=a, Y=b, density=DensityIndicator.kde, damping=self._damping)
+            value = method(X=a, Y=b, density=DensityIndicator.kde, damping=self.damping)
             value = self.backend.cast(value.detach().cpu().numpy())
         return value, dict()
 

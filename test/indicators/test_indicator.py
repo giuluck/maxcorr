@@ -16,9 +16,9 @@ class TestIndicator(unittest.TestCase):
     LENGTH: int = 10
 
     BACKENDS: Dict[BackendType, Backend] = {
-        'tensorflow': TensorflowBackend(),
+        'numpy': NumpyBackend(),
         'torch': TorchBackend(),
-        'numpy': NumpyBackend()
+        'tensorflow': TensorflowBackend()
     }
 
     SEMANTICS: List[SemanticsType] = ['hgr', 'gedi', 'nlc']

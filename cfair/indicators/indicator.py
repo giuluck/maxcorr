@@ -71,30 +71,31 @@ class Indicator:
             The backend to use to compute the indicator, or its alias.
 
         :param semantics:
-            The semantics of the indicator ('hgr', 'gedi', or 'nlc').
+            The semantics of the indicator.
         """
         # handle backend
-        backend = backend.lower()
-        if backend == 'numpy':
+        backend_lower = backend.lower()
+        if backend_lower == 'numpy':
             backend = NumpyBackend()
-        elif backend == 'tensorflow':
+        elif backend_lower == 'tensorflow':
             backend = TensorflowBackend()
-        elif backend == 'torch':
+        elif backend_lower == 'torch':
             backend = TorchBackend()
         elif not isinstance(backend, Backend):
             raise ValueError(f"Unknown backend '{backend}'")
         # handle semantics
-        semantics = semantics.lower()
-        if semantics == 'hgr':
+        semantics_lower = semantics.lower()
+        if semantics_lower == 'hgr':
             factor = lambda a, b: 1
-        elif semantics == 'gedi':
+        elif semantics_lower == 'gedi':
             factor = lambda a, b: self.backend.std(b) / self.backend.std(a)
-        elif semantics == 'nlc':
+        elif semantics_lower == 'nlc':
             factor = lambda a, b: self.backend.std(b) * self.backend.std(a)
         else:
             raise ValueError(f"Unknown semantics '{semantics}'")
         # noinspection PyTypeChecker
         self._backend: Backend = backend
+        self._semantics: SemanticsType = semantics
         self._factor: Callable[[Any, Any], Any] = factor
         self._last_result: Optional[Indicator.Result] = None
         self._num_calls: int = 0
@@ -103,6 +104,11 @@ class Indicator:
     def backend(self) -> Backend:
         """The backend to use to compute the indicator."""
         return self._backend
+
+    @property
+    def semantics(self) -> SemanticsType:
+        """The semantics of the indicator."""
+        return self._semantics
 
     @property
     def last_result(self) -> Optional[Result]:

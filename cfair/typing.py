@@ -6,5 +6,5 @@ BackendType = Literal['numpy', 'tensorflow', 'torch']
 SemanticsType = Literal['hgr', 'gedi', 'nlc']
 """The typeclass of the indicator semantics."""
 
-AlgorithmType = Literal['hgr', 'gedi', 'nlc']
+AlgorithmType = Literal['dk', 'sk', 'nn', 'kde', 'rdc']
 """The typeclass of the indicator algorithms."""
