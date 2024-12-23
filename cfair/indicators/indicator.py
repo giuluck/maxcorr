@@ -1,12 +1,50 @@
-from abc import abstractmethod, ABC
+from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional, Union
+from typing import Any, Optional, Callable, Union, Tuple, Dict
 
 from cfair.backends import NumpyBackend, TorchBackend, Backend, TensorflowBackend
+from cfair.typing import BackendType, SemanticsType
 
 
 class Indicator:
-    """Interface of a fairness indicator for continuous attributes."""
+    """Interface of a fairness indicator for continuous attributes.
+
+    The definition of the indicators are based on three semantics obtained by projecting the input vectors into a
+    non-linear mapping space. The first vector (a) is mapped into its projection (x) defined as:
+        x = fa * std(a), where mean(fa) = 0 and std(fa) = 1
+    while the second vector (b) is mapped into its projection (y) defined as:
+        y = gb * std(b), where mean(gb) = 0 and std(gb) = 1
+
+    By definition, projections (x, y) are centered and with standard deviation equal to the original vectors (a, b),
+    while we also consider their standardized versions as <fa> and <gb>, respectively. At this point, the three
+    semantics simply define three correlation indicators on <x> and <y>, specifically:
+
+        - HGR is the Hirschfield-Gebelin-Renyi indicator, namely the Non-Linear Pearson's correlation. It is computed
+          as the average of the product between the standardized projections without a scaling factor, in fact:
+            pearson(x, y) = cov(x, y) / std(x) / std(y) =
+                          = cov(x, y) / std(a) / std(b) =
+                          = cov(fa * std(a), gb * std(b)) / std(a) / std(b) =
+                          = cov(fa, gb) =
+                          = mean(fa * gb)
+
+        - GeDI is the Generalized Disparate Impact, namely the ration between the covariance of the two vectors and the
+          variance of the first. Eventually, it can be computed as the average of the product between the standardized
+          projections (HGR) multiplied by a scaling factor std(b) / std(a), in fact:
+            cov(x, y) / var(x) = cov(x, y) / var(a) =
+                               = cov(x, y) / std(a) / std(a) =
+                               = cov(fa * std(a), gb * std(b)) / std(a) / std(a) =
+                               = cov(fa, gb) * std(b) / std(a) =
+                               = mean(fa * gb) * std(b) / std(a) =
+                               = HGR(a, b) * std(b) / std(a)
+
+        - NLC is the Non-Linear Covariance, which can be eventually computed as the average of the product between the
+          standardized projections (HGR) multiplied by a scaling factor std(b) * std(a), in fact:
+            cov(x, y) = cov(x, y) =
+                      = cov(fa * std(a), gb * std(b)) =
+                      = cov(fa, gb) * std(b) * std(a) =
+                      = mean(fa * gb) * std(b) * std(a) =
+                      = HGR(a, b) * std(b) * std(a)
+    """
 
     @dataclass(frozen=True, init=True, repr=False, eq=False)
     class Result:
@@ -27,20 +65,37 @@ class Indicator:
         num_call: int = field()
         """The n-th time at which the indicator instance that generated the result was called."""
 
-    def __init__(self, backend: Union[str, Backend]):
+    def __init__(self, backend: Union[Backend, BackendType], semantics: SemanticsType):
         """
         :param backend:
             The backend to use to compute the indicator, or its alias.
+
+        :param semantics:
+            The semantics of the indicator ('hgr', 'gedi', or 'nlc').
         """
+        # handle backend
+        backend = backend.lower()
         if backend == 'numpy':
             backend = NumpyBackend()
         elif backend == 'tensorflow':
             backend = TensorflowBackend()
         elif backend == 'torch':
             backend = TorchBackend()
+        elif not isinstance(backend, Backend):
+            raise ValueError(f"Unknown backend '{backend}'")
+        # handle semantics
+        semantics = semantics.lower()
+        if semantics == 'hgr':
+            factor = lambda a, b: 1
+        elif semantics == 'gedi':
+            factor = lambda a, b: self.backend.std(b) / self.backend.std(a)
+        elif semantics == 'nlc':
+            factor = lambda a, b: self.backend.std(b) * self.backend.std(a)
         else:
-            assert isinstance(backend, Backend), f"Unknown backend '{backend}'"
+            raise ValueError(f"Unknown semantics '{semantics}'")
+        # noinspection PyTypeChecker
         self._backend: Backend = backend
+        self._factor: Callable[[Any, Any], Any] = factor
         self._last_result: Optional[Indicator.Result] = None
         self._num_calls: int = 0
 
@@ -88,13 +143,22 @@ class Indicator:
         assert bk.ndim(a) == bk.ndim(b) == 1, f"Expected vectors with one dimension, got {bk.ndim(a)} and {bk.ndim(b)}"
         assert bk.len(a) == bk.len(b), f"Input vectors must have the same dimension, got {bk.len(a)} != {bk.len(b)}"
         self._num_calls += 1
-        res = self._compute(a=bk.cast(a, dtype=float), b=bk.cast(b, dtype=float))
-        self._last_result = res
-        return res
+        value, kwargs = self._value(a=bk.cast(a, dtype=float), b=bk.cast(b, dtype=float))
+        # noinspection PyArgumentList
+        result = self.Result(
+            a=a,
+            b=b,
+            value=value * self._factor(a, b),
+            num_call=self.num_calls,
+            indicator=self,
+            **kwargs
+        )
+        self._last_result = result
+        return result
 
     @abstractmethod
-    def _factor(self, a, b) -> Any:
-        """The scaling factor to compute the indicator based on its semantics.
+    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+        """Computes the value of the indicator.
 
         :param a:
             The first vector.
@@ -103,22 +167,7 @@ class Indicator:
             The second vector.
 
         :result:
-            A value respecting the backend types representing the scaling factor.
-        """
-        pass
-
-    @abstractmethod
-    def _compute(self, a, b) -> Result:
-        """Computes the indicator value without performing any additional check.
-
-        :param a:
-            The first vector.
-
-        :param b:
-            The second vector.
-
-        :result:
-            A `Result` instance containing the computed indicator value together with additional information.
+            A tuple <value, kwargs> containing the value of the indicator along with optional additional results.
         """
         pass
 
@@ -126,15 +175,18 @@ class Indicator:
 class CopulaIndicator(Indicator):
     """Interface of a fairness indicator for continuous attributes using copula transformations."""
 
-    def __init__(self, backend: Union[str, Backend], eps: float):
+    def __init__(self, backend: Union[Backend, BackendType], semantics: SemanticsType, eps: float):
         """
         :param backend:
             The backend to use to compute the indicator, or its alias.
 
+        :param semantics:
+            The semantics of the indicator.
+
         :param eps:
             The epsilon value used to avoid division by zero in case of null standard deviation.
         """
-        super(CopulaIndicator, self).__init__(backend=backend)
+        super(CopulaIndicator, self).__init__(backend=backend, semantics=semantics)
         self._eps: float = eps
 
     @property
@@ -191,70 +243,3 @@ class CopulaIndicator(Indicator):
         gb = self.backend.standardize(self._g(b=b), eps=self.eps)
         value = self.backend.mean(fa * gb) * self._factor(a=a, b=b)
         return self.backend.item(value)
-
-
-class HGRIndicator(Indicator, ABC):
-    """Hirschfield-Gebelin-Renyi indicator (i.e., Non-Linear Pearson's correlation).
-
-    The first mapped vector is:
-        x = fa * std(a), where mean(fa) = 0 and std(fa) = 1
-    and the second mapped vector is:
-        y = gb * std(b), where mean(gb) = 0 and std(gb) = 1
-    i.e., both mapped vectors (x, y) are centered and with standard deviation equal to the original vectors (a, b).
-
-    HGR is eventually computed as:
-        pearson(x, y) = cov(x, y) / std(x) / std(y) =
-                      = cov(x, y) / std(a) / std(b) =
-                      = cov(fa * std(a), gb * std(b)) / std(a) / std(b) =
-                      = cov(fa, gb) =
-                      = mean(fa * gb)
-    i.e., HGR is the average of the product between the standardized copula transformations (without a scaling factor).
-    """
-
-    def _factor(self, a, b) -> Any:
-        return 1
-
-
-class GeDIIndicator(Indicator, ABC):
-    """Generalized Disparate Impact indicator.
-
-    The first mapped vector is:
-        x = fa * std(a), where mean(fa) = 0 and std(fa) = 1
-    and the second mapped vector is:
-        y = gb * std(b), where mean(gb) = 0 and std(gb) = 1
-    i.e., both mapped vectors (x, y) are centered and with standard deviation equal to the original vectors (a, b).
-
-    GeDI is eventually computed as:
-        cov(x, y) / var(x) = cov(x, y) / var(a) =
-                           = cov(x, y) / std(a) / std(a) =
-                           = cov(fa * std(a), gb * std(b)) / std(a) / std(a) =
-                           = cov(fa, gb) * std(b) / std(a) =
-                           = mean(fa * gb) * std(b) / std(a)
-    i.e., GeDI is the average of the product between the standardized copula transformations (HGR) multiplied by a
-    scaling factor std(b) / std(a).
-    """
-
-    def _factor(self, a, b) -> Any:
-        return self.backend.std(b) / self.backend.std(a)
-
-
-class NLCIndicator(Indicator, ABC):
-    """Non-Linear Covariance (NLC) computed using two neural networks to approximate the copula transformations.
-
-    The first mapped vector is:
-        x = fa * std(a), where mean(fa) = 0 and std(fa) = 1
-    and the second mapped vector is:
-        y = gb * std(b), where mean(gb) = 0 and std(gb) = 1
-    i.e., both mapped vectors (x, y) are centered and with standard deviation equal to the original vectors (a, b).
-
-    NLC is eventually computed as:
-        cov(x, y) = cov(x, y) =
-                  = cov(fa * std(a), gb * std(b)) =
-                  = cov(fa, gb) * std(b) * std(a) =
-                  = mean(fa * gb) * std(b) * std(a)
-    i.e., NLC is the average of the product between the standardized copula transformations (HGR) multiplied by a
-    scaling factor std(b) * std(a).
-    """
-
-    def _factor(self, a, b) -> Any:
-        return self.backend.std(b) * self.backend.std(a)

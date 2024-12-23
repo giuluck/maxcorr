@@ -1,22 +1,20 @@
 """
-GeDI and HGR implementations of the method from "Generalized Disparate Impact for Configurable Fairness Solutions in ML"
-by Luca Giuliani, Eleonora Misino and Michele Lombardi, and "Enhancing the Applicability of Fair Learning with
-Continuous Attributes" by Luca Giuliani and Michele Lombardi, respectively. The code has been partially taken and
-reworked from the repositories containing the code of the paper, respectively:
-- https://github.com/giuluck/GeneralizedDisparateImpact/tree/main
-- https://github.com/giuluck/kernel-based-hgr/tree/main
+Implementations of the method from "Generalized Disparate Impact for Configurable Fairness Solutions in ML" by Luca
+Giuliani, Eleonora Misino and Michele Lombardi. The code has been partially taken and reworked from the repository
+containing the code of the paper: https://github.com/giuluck/GeneralizedDisparateImpact/tree/main.
 """
 
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from typing import Tuple, Optional, List, Any, Union, Callable
+from typing import Tuple, Optional, List, Any, Union, Callable, Dict
 
 import numpy as np
 import scipy
 from scipy.optimize import NonlinearConstraint, minimize
 
 from cfair.backends import Backend
-from cfair.indicators.indicator import CopulaIndicator, HGRIndicator, GeDIIndicator, NLCIndicator
+from cfair.indicators.indicator import CopulaIndicator
+from cfair.typing import BackendType, SemanticsType
 
 
 class KernelBasedIndicator(CopulaIndicator):
@@ -33,7 +31,8 @@ class KernelBasedIndicator(CopulaIndicator):
         """The coefficient vector for the f copula transformation."""
 
     def __init__(self,
-                 backend: Union[str, Backend],
+                 backend: Union[Backend, BackendType],
+                 semantics: SemanticsType,
                  method: str,
                  maxiter: int,
                  eps: float,
@@ -43,6 +42,9 @@ class KernelBasedIndicator(CopulaIndicator):
         """
         :param backend:
             The backend to use to compute the indicator, or its alias.
+
+        :param semantics:
+            The semantics of the indicator.
 
         :param method:
             The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
@@ -62,7 +64,7 @@ class KernelBasedIndicator(CopulaIndicator):
         :param delta_independent:
             A delta value used to select linearly dependent columns and remove them, or None to avoid this step.
         """
-        super(KernelBasedIndicator, self).__init__(backend=backend, eps=eps)
+        super(KernelBasedIndicator, self).__init__(backend=backend, semantics=semantics, eps=eps)
         self._method: str = method
         self._maxiter: int = maxiter
         self._tol: float = tol
@@ -192,7 +194,13 @@ class KernelBasedIndicator(CopulaIndicator):
                 g_columns.append(g[idx])
         return (f_columns, f_indices), (g_columns, g_indices)
 
-    def _result(self, a, b, kernel_a: bool, kernel_b: bool, a0: Optional, b0: Optional) -> Result:
+    def _result(self,
+                a,
+                b,
+                kernel_a: bool,
+                kernel_b: bool,
+                a0: Optional,
+                b0: Optional) -> Tuple[Any, List[float], List[float]]:
         # build the kernel matrices, compute their original degrees, and get the linearly independent indices
         f = self.kernel_a(a) if kernel_a else [a]
         g = self.kernel_b(b) if kernel_b else [b]
@@ -285,7 +293,7 @@ class KernelBasedIndicator(CopulaIndicator):
         # (since vectors are standardized) multiplied by the scaling factor
         fa = self.backend.standardize(self.backend.matmul(f_slim, alpha), eps=self.eps)
         gb = self.backend.standardize(self.backend.matmul(g_slim, beta), eps=self.eps)
-        value = self.backend.mean(fa * gb) * self._factor(a=a, b=b)
+        value = self.backend.mean(fa * gb) * self._factor(a, b)
         # reconstruct alpha and beta by adding zeros for the ignored indices, and normalize for ease of comparison
         alpha_full = np.zeros(len(f))
         alpha_full[f_indices] = alpha_numpy
@@ -293,16 +301,8 @@ class KernelBasedIndicator(CopulaIndicator):
         beta_full = np.zeros(len(g))
         beta_full[g_indices] = beta_numpy
         beta_full = beta_full / np.abs(beta_full).sum()
-        # return the result instance, converting alpha and beta to lists of floats
-        return KernelBasedIndicator.Result(
-            a=a,
-            b=b,
-            value=value,
-            num_call=self.num_calls,
-            indicator=self,
-            alpha=[float(v) for v in alpha_full],
-            beta=[float(v) for v in beta_full],
-        )
+        # return the results, converting alpha and beta to lists of floats
+        return value, [float(v) for v in alpha_full], [float(v) for v in beta_full]
 
 
 class DoubleKernelIndicator(KernelBasedIndicator, ABC):
@@ -311,7 +311,8 @@ class DoubleKernelIndicator(KernelBasedIndicator, ABC):
     def __init__(self,
                  kernel_a: Union[int, Callable[[Any], list]] = 3,
                  kernel_b: Union[int, Callable[[Any], list]] = 3,
-                 backend: Union[str, Backend] = 'numpy',
+                 backend: Union[Backend, BackendType] = 'numpy',
+                 semantics: SemanticsType = 'hgr',
                  method: str = 'trust-constr',
                  maxiter: int = 1000,
                  eps: float = 1e-9,
@@ -319,14 +320,17 @@ class DoubleKernelIndicator(KernelBasedIndicator, ABC):
                  use_lstsq: bool = True,
                  delta_independent: Optional[float] = None):
         """
-        :param backend:
-            The backend to use to compute the indicator, or its alias.
-
         :param kernel_a:
             Either a callable f(a) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
 
         :param kernel_b:
             Either a callable g(b) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
+
+        :param backend:
+            The backend to use to compute the indicator, or its alias.
+
+        :param semantics:
+            The semantics of the indicator.
 
         :param method:
             The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
@@ -348,6 +352,7 @@ class DoubleKernelIndicator(KernelBasedIndicator, ABC):
         """
         super(DoubleKernelIndicator, self).__init__(
             backend=backend,
+            semantics=semantics,
             method=method,
             maxiter=maxiter,
             eps=eps,
@@ -372,10 +377,11 @@ class DoubleKernelIndicator(KernelBasedIndicator, ABC):
     def kernel_b(self, b) -> list:
         return self._kernel_b(b)
 
-    def _compute(self, a, b) -> KernelBasedIndicator.Result:
+    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
-        return self._result(a=a, b=b, kernel_a=True, kernel_b=True, a0=a0, b0=b0)
+        value, alpha, beta = self._result(a=a, b=b, kernel_a=True, kernel_b=True, a0=a0, b0=b0)
+        return value, dict(alpha=alpha, beta=beta)
 
 
 class SingleKernelIndicator(KernelBasedIndicator, ABC):
@@ -383,7 +389,8 @@ class SingleKernelIndicator(KernelBasedIndicator, ABC):
 
     def __init__(self,
                  kernel: Union[int, Callable[[Any], list]] = 3,
-                 backend: Union[str, Backend] = 'numpy',
+                 backend: Union[Backend, BackendType] = 'numpy',
+                 semantics: SemanticsType = 'hgr',
                  method: str = 'trust-constr',
                  maxiter: int = 1000,
                  eps: float = 1e-9,
@@ -391,11 +398,14 @@ class SingleKernelIndicator(KernelBasedIndicator, ABC):
                  use_lstsq: bool = True,
                  delta_independent: Optional[float] = None):
         """
+        :param kernel:
+            Either a callable k(x) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
+
         :param backend:
             The backend to use to compute the indicator, or its alias.
 
-        :param kernel:
-            Either a callable k(x) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
+        :param semantics:
+            The semantics of the indicator.
 
         :param method:
             The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
@@ -417,6 +427,7 @@ class SingleKernelIndicator(KernelBasedIndicator, ABC):
         """
         super(SingleKernelIndicator, self).__init__(
             backend=backend,
+            semantics=semantics,
             method=method,
             maxiter=maxiter,
             eps=eps,
@@ -441,109 +452,19 @@ class SingleKernelIndicator(KernelBasedIndicator, ABC):
     def kernel_b(self, b) -> list:
         return self.kernel(b)
 
-    def _compute(self, a, b) -> KernelBasedIndicator.Result:
+    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
-        res_a = self._result(a=a, b=b, kernel_a=True, kernel_b=False, a0=a0, b0=None)
-        res_b = self._result(a=a, b=b, kernel_a=False, kernel_b=True, a0=None, b0=b0)
-        val_a = res_a.value
-        val_b = res_b.value
+        val_a, alpha_a, beta_a = self._result(a=a, b=b, kernel_a=True, kernel_b=False, a0=a0, b0=None)
+        val_b, alpha_b, beta_b = self._result(a=a, b=b, kernel_a=False, kernel_b=True, a0=None, b0=b0)
         if val_a > val_b:
             value = val_a
-            alpha = res_a.alpha
+            alpha = alpha_a
             degree = len(alpha)
-            beta = np.concatenate((res_a.beta, np.zeros(degree - 1)))
+            beta = np.concatenate((beta_a, np.zeros(degree - 1)))
         else:
             value = val_b
-            beta = res_b.beta
+            beta = beta_b
             degree = len(beta)
-            alpha = np.concatenate((res_b.alpha, np.zeros(degree - 1)))
-        return KernelBasedIndicator.Result(
-            a=a,
-            b=b,
-            value=value,
-            num_call=self.num_calls,
-            indicator=self,
-            alpha=alpha,
-            beta=beta,
-        )
-
-
-class DoubleKernelHGR(DoubleKernelIndicator, HGRIndicator):
-    """Hirschfield-Gebelin-Renyi coefficient using two user-defined kernels as the copula transformations."""
-    pass
-
-
-class SingleKernelHGR(SingleKernelIndicator, HGRIndicator):
-    """Hirschfield-Gebelin-Renyi coefficient using a single user-defined kernel as the copula transformation."""
-    pass
-
-
-class DoubleKernelGeDI(DoubleKernelIndicator, GeDIIndicator):
-    """Generalized Disparate Impact using two user-defined kernels as the copula transformations."""
-
-    # default value is to have the kernel on the first vector only
-    def __init__(self,
-                 kernel_a: Union[int, Callable[[Any], list]] = 3,
-                 kernel_b: Union[int, Callable[[Any], list]] = 1,
-                 backend: Union[str, Backend] = 'numpy',
-                 method: str = 'trust-constr',
-                 maxiter: int = 1000,
-                 eps: float = 1e-9,
-                 tol: float = 1e-9,
-                 use_lstsq: bool = True,
-                 delta_independent: Optional[float] = None):
-        """
-        :param backend:
-            The backend to use to compute the indicator, or its alias.
-
-        :param kernel_a:
-            Either a callable f(a) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
-
-        :param kernel_b:
-            Either a callable g(b) yielding a list of variable's kernels, or an integer degree for a polynomial kernel.
-
-        :param method:
-            The optimization method as in scipy.optimize.minimize, either 'trust-constr' or 'SLSQP'.
-
-        :param maxiter:
-            The maximal number of iterations before stopping the optimization process as in scipy.optimize.minimize.
-
-        :param eps:
-            The epsilon value used to avoid division by zero in case of null standard deviation.
-
-        :param tol:
-            The tolerance used in the stopping criterion for the optimization process scipy.optimize.minimize.
-
-        :param use_lstsq:
-            Whether to rely on the least-square problem closed-form solution when at least one of the degrees is 1.
-
-        :param delta_independent:
-            A delta value used to select linearly dependent columns and remove them, or None to avoid this step.
-        """
-        super(DoubleKernelGeDI, self).__init__(
-            backend=backend,
-            kernel_a=kernel_a,
-            kernel_b=kernel_b,
-            method=method,
-            maxiter=maxiter,
-            eps=eps,
-            tol=tol,
-            use_lstsq=use_lstsq,
-            delta_independent=delta_independent
-        )
-
-
-class SingleKernelGeDI(SingleKernelIndicator, GeDIIndicator):
-    """Generalized Disparate Impact using a single user-defined kernel as the copula transformation."""
-    pass
-
-
-class DoubleKernelNLC(DoubleKernelIndicator, NLCIndicator):
-    """Non-Linear Covariance using two user-defined kernels as the copula transformations."""
-    pass
-
-
-class SingleKernelNLC(SingleKernelIndicator, NLCIndicator):
-    """Non-Linear Covariance using a single user-defined kernel as the copula transformation."""
-    pass
+            alpha = np.concatenate((alpha_b, np.zeros(degree - 1)))
+        return value, dict(alpha=alpha, beta=beta)

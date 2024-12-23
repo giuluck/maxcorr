@@ -1,20 +1,23 @@
 from typing import Union
 
 from cfair.backends import Backend
-from cfair.indicators import DoubleKernelHGR, SingleKernelHGR
-from cfair.indicators.indicator import Indicator, HGRIndicator, GeDIIndicator, NLCIndicator
-from cfair.indicators.kernel import DoubleKernelGeDI, SingleKernelGeDI, DoubleKernelNLC, SingleKernelNLC
-from cfair.indicators.neural import NeuralHGR, NeuralGeDI, NeuralNLC
+from cfair.indicators.indicator import Indicator
+from cfair.indicators.kernel import DoubleKernelIndicator, SingleKernelIndicator
+from cfair.indicators.neural import NeuralIndicator
+from cfair.typing import BackendType, SemanticsType, AlgorithmType
 
 
-def indicator(backend: Union[str, Backend], semantics: str, algorithm: str, **kwargs) -> Indicator:
+def indicator(backend: Union[Backend, BackendType],
+              semantics: SemanticsType,
+              algorithm: AlgorithmType,
+              **kwargs) -> Indicator:
     """Builds the instance of a fairness indicator for continuous attributes using the given indicator semantics.
 
     :param backend:
-        The backend to use.
+        The backend to use, or its alias.
 
     :param semantics:
-        The type of indicator semantics, either 'hgr' or 'gedi'.
+        The type of indicator semantics.
 
     :param algorithm:
         The computational algorithm used for computing the indicator.
@@ -22,22 +25,22 @@ def indicator(backend: Union[str, Backend], semantics: str, algorithm: str, **kw
     :param kwargs:
         Additional algorithm-specific arguments.
     """
-    semantics = semantics.lower()
-    if semantics == 'hgr':
-        return hgr(backend=backend, algorithm=algorithm, **kwargs)
-    elif semantics == 'gedi':
-        return gedi(backend=backend, algorithm=algorithm, **kwargs)
-    elif semantics == 'nlc':
-        return nlc(backend=backend, algorithm=algorithm, **kwargs)
+    algorithm = algorithm.lower().replace('-', ' ').replace('_', ' ')
+    if algorithm in ['dk', 'double kernel']:
+        return DoubleKernelIndicator(backend=backend, semantics=semantics, **kwargs)
+    elif algorithm in ['sk', 'single kernel']:
+        return SingleKernelIndicator(backend=backend, semantics=semantics, **kwargs)
+    elif algorithm in ['nn', 'neural']:
+        return NeuralIndicator(backend=backend, semantics=semantics, **kwargs)
     else:
-        raise AssertionError(f"Unsupported semantics '{semantics}'")
+        raise AssertionError(f"Unsupported algorithm '{algorithm}'")
 
 
-def hgr(backend: Union[str, Backend], algorithm: str = 'dk', **kwargs) -> HGRIndicator:
+def hgr(backend: Union[Backend, BackendType], algorithm: AlgorithmType = 'dk', **kwargs) -> Indicator:
     """Builds a Hirschfield-Gebelin-Renyi (HGR) indicator instance.
 
     :param backend:
-        The backend to use.
+        The backend to use, or its alias.
 
     :param algorithm:
         The computational algorithm used for computing the indicator.
@@ -45,22 +48,14 @@ def hgr(backend: Union[str, Backend], algorithm: str = 'dk', **kwargs) -> HGRInd
     :param kwargs:
         Additional algorithm-specific arguments.
     """
-    algorithm = algorithm.lower().replace('-', ' ').replace('_', ' ')
-    if algorithm in ['dk', 'double kernel']:
-        return DoubleKernelHGR(backend=backend, **kwargs)
-    elif algorithm in ['sk', 'single kernel']:
-        return SingleKernelHGR(backend=backend, **kwargs)
-    elif algorithm in ['nn', 'neural']:
-        return NeuralHGR(backend=backend, **kwargs)
-    else:
-        raise AssertionError(f"Unsupported HGR algorithm '{algorithm}'")
+    return indicator(backend=backend, algorithm=algorithm, semantics='hgr', **kwargs)
 
 
-def gedi(backend: Union[str, Backend], algorithm: str = 'dk', **kwargs) -> GeDIIndicator:
+def gedi(backend: Union[Backend, BackendType], algorithm: AlgorithmType = 'dk', **kwargs) -> Indicator:
     """Builds a Generalized Disparate Impact (GeDI) indicator instance.
 
     :param backend:
-        The backend to use.
+        The backend to use, or its alias.
 
     :param algorithm:
         The computational algorithm used for computing the indicator.
@@ -68,22 +63,14 @@ def gedi(backend: Union[str, Backend], algorithm: str = 'dk', **kwargs) -> GeDII
     :param kwargs:
         Additional algorithm-specific arguments.
     """
-    algorithm = algorithm.lower().replace('-', ' ').replace('_', ' ')
-    if algorithm in ['dk', 'double kernel']:
-        return DoubleKernelGeDI(backend=backend, **kwargs)
-    elif algorithm in ['sk', 'single kernel']:
-        return SingleKernelGeDI(backend=backend, **kwargs)
-    elif algorithm in ['nn', 'neural']:
-        return NeuralGeDI(backend=backend, **kwargs)
-    else:
-        raise AssertionError(f"Unsupported GeDI algorithm '{algorithm}'")
+    return indicator(backend=backend, algorithm=algorithm, semantics='gedi', **kwargs)
 
 
-def nlc(backend: Union[str, Backend], algorithm: str = 'dk', **kwargs) -> NLCIndicator:
+def nlc(backend: Union[Backend, BackendType], algorithm: AlgorithmType = 'dk', **kwargs) -> Indicator:
     """Builds a Non-Linear Covariance (NLC) indicator instance.
 
     :param backend:
-        The backend to use.
+        The backend to use, or its alias.
 
     :param algorithm:
         The computational algorithm used for computing the indicator.
@@ -91,12 +78,4 @@ def nlc(backend: Union[str, Backend], algorithm: str = 'dk', **kwargs) -> NLCInd
     :param kwargs:
         Additional algorithm-specific arguments.
     """
-    algorithm = algorithm.lower().replace('-', ' ').replace('_', ' ')
-    if algorithm in ['dk', 'double kernel']:
-        return DoubleKernelNLC(backend=backend, **kwargs)
-    elif algorithm in ['sk', 'single kernel']:
-        return SingleKernelNLC(backend=backend, **kwargs)
-    elif algorithm in ['nn', 'neural']:
-        return NeuralNLC(backend=backend, **kwargs)
-    else:
-        raise AssertionError(f"Unsupported GeDI algorithm '{algorithm}'")
+    return indicator(backend=backend, algorithm=algorithm, semantics='nlc', **kwargs)

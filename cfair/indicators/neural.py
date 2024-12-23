@@ -1,35 +1,39 @@
 """
-HGR implementation of the method from "Fairness-Aware Neural Renyi Minimization for Continuous Features" by Vincent
-Grari, Sylvain Lamprier and Marcin Detyniecki. The code has been partially taken and reworked from the repository
-containing the code of the paper: https://github.com/fairml-research/HGR_NN/tree/main.
+Implementation of the method from "Fairness-Aware Neural Renyi Minimization for Continuous Features" by Vincent Grari,
+Sylvain Lamprier and Marcin Detyniecki. The code has been partially taken and reworked from the repository containing
+the code of the paper: https://github.com/fairml-research/HGR_NN/tree/main.
 """
 import importlib.util
-from abc import ABC
-from typing import Any, Union, Iterable, Optional, Tuple, Callable
+from typing import Any, Iterable, Optional, Tuple, Callable, Union, Dict
 
 from cfair.backends import Backend, NumpyBackend, TorchBackend, TensorflowBackend
-from cfair.indicators.indicator import CopulaIndicator, HGRIndicator, GeDIIndicator, NLCIndicator
+from cfair.indicators.indicator import CopulaIndicator
+from cfair.typing import BackendType, SemanticsType
 
 
-class NeuralIndicator(CopulaIndicator, ABC):
+class NeuralIndicator(CopulaIndicator):
     """Fairness indicator computed using two neural networks to approximate the copula transformations."""
 
     def __init__(self,
                  f_units: Optional[Iterable[int]] = (16, 16, 8),
                  g_units: Optional[Iterable[int]] = (16, 16, 8),
-                 backend: Union[str, Backend] = 'numpy',
+                 backend: Union[Backend, BackendType] = 'numpy',
+                 semantics: SemanticsType = 'hgr',
                  epochs_start: int = 1000,
                  epochs_successive: Optional[int] = 50,
                  eps: float = 1e-9):
         """
-        :param backend:
-            The backend to use to compute the indicator, or its alias.
-
         :param f_units:
             The hidden units of the F copula network, or None for no F copula network.
 
         :param g_units:
             The hidden units of the G copula network, or None for no G copula network.
+
+        :param backend:
+            The backend to use to compute the indicator, or its alias.
+
+        :param semantics:
+            The semantics of the indicator.
 
         :param epochs_start:
             The number of training epochs in the first call.
@@ -41,7 +45,7 @@ class NeuralIndicator(CopulaIndicator, ABC):
             The epsilon value used to avoid division by zero in case of null standard deviation.
         """
         assert f_units is not None or g_units is not None, "Either f_units or g_units must not be None"
-        super(NeuralIndicator, self).__init__(backend=backend, eps=eps)
+        super(NeuralIndicator, self).__init__(backend=backend, semantics=semantics, eps=eps)
         # use default backend if it has a neural engine, otherwise prioritize torch and then tensorflow
         if isinstance(self.backend, TensorflowBackend):
             build_fn = self._build_tensorflow
@@ -106,7 +110,7 @@ class NeuralIndicator(CopulaIndicator, ABC):
         gb = self._neural_backend.reshape(gb, shape=-1)
         return self._neural_backend.numpy(gb) if isinstance(self.backend, NumpyBackend) else gb
 
-    def _compute(self, a, b) -> CopulaIndicator.Result:
+    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
         # cast the vectors to the neural backend type
         a_cast = self._neural_backend.reshape(self._neural_backend.cast(a, dtype=float), shape=(-1, 1))
         b_cast = self._neural_backend.reshape(self._neural_backend.cast(b, dtype=float), shape=(-1, 1))
@@ -114,16 +118,10 @@ class NeuralIndicator(CopulaIndicator, ABC):
             self._train_fn(a_cast, b_cast)
         # compute the indicator value as the absolute value of the (mean) vector product
         # (since vectors are standardized) multiplied by the scaling factor
-        value = self._hgr(a=a_cast, b=b_cast) * self._factor(a=a, b=b)
+        value = self._hgr(a=a_cast, b=b_cast) * self._factor(a, b)
         value = self._neural_backend.item(value) if isinstance(self.backend, NumpyBackend) else value
         # return the result instance
-        return NeuralIndicator.Result(
-            a=a,
-            b=b,
-            value=value,
-            num_call=self.num_calls,
-            indicator=self
-        )
+        return value, dict()
 
     class _DummyNetwork:
         def __call__(self, x):
@@ -191,18 +189,3 @@ class NeuralIndicator(CopulaIndicator, ABC):
         g_grads = tape.gradient(loss, self._netG.trainable_weights)
         self._optF.apply_gradients(zip(f_grads, self._netF.trainable_weights))
         self._optG.apply_gradients(zip(g_grads, self._netG.trainable_weights))
-
-
-class NeuralHGR(NeuralIndicator, HGRIndicator):
-    """Hirschfield-Gebelin-Renyi coefficient using two neural networks to approximate the copula transformations."""
-    pass
-
-
-class NeuralGeDI(NeuralIndicator, GeDIIndicator):
-    """Generalized Disparate Impact using two neural networks to approximate the copula transformations."""
-    pass
-
-
-class NeuralNLC(NeuralIndicator, NLCIndicator):
-    """Non-Linear Covariance computed two neural networks to approximate the copula transformations."""
-    pass
