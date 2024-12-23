@@ -1,6 +1,7 @@
 from typing import Union
 
 from cfair.backends import Backend
+from cfair.indicators.density import DensityIndicator
 from cfair.indicators.indicator import Indicator
 from cfair.indicators.kernel import DoubleKernelIndicator, SingleKernelIndicator
 from cfair.indicators.neural import NeuralIndicator
@@ -32,6 +33,8 @@ def indicator(backend: Union[Backend, BackendType],
         return SingleKernelIndicator(backend=backend, semantics=semantics, **kwargs)
     elif algorithm in ['nn', 'neural']:
         return NeuralIndicator(backend=backend, semantics=semantics, **kwargs)
+    elif algorithm in ['kde', 'density']:
+        return DensityIndicator(backend=backend, semantics=semantics, **kwargs)
     else:
         raise AssertionError(f"Unsupported algorithm '{algorithm}'")
 

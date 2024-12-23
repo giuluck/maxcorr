@@ -23,8 +23,6 @@ class TestIndicator(unittest.TestCase):
 
     SEMANTICS: List[SemanticsType] = ['hgr', 'gedi', 'nlc']
 
-    UNSUPPORTED_BACKENDS: List[str] = []
-
     # noinspection PyTypeChecker
     @abstractmethod
     def indicators(self, backend: BackendType, semantics: SemanticsType) -> List[Indicator]:
@@ -39,24 +37,10 @@ class TestIndicator(unittest.TestCase):
     def vectors(self, *seeds: int, backend: Backend) -> list:
         return [backend.cast(v=np.random.default_rng(seed=s).normal(size=self.LENGTH), dtype=float) for s in seeds]
 
-    def check_unsupported(self, backend: BackendType, semantics: SemanticsType) -> bool:
-        if backend in self.UNSUPPORTED_BACKENDS:
-            try:
-                self.indicators(backend=backend, semantics=semantics)
-            except ValueError as e:
-                self.assertTrue(
-                    str(e).endswith(f"indicator does not support {backend}"),
-                    msg=f"Wrong exception message from unsupported backend: {backend}"
-                )
-            return True
-        return False
-
     def test_value(self) -> None:
         # perform a simple sanity check on the stored result
         for bk, backend in self.BACKENDS.items():
             for sm in self.SEMANTICS:
-                if self.check_unsupported(backend=bk, semantics=sm):
-                    continue
                 vec1, vec2 = self.vectors(0, 1, backend=backend)
                 for mt in self.indicators(backend=bk, semantics=sm):
                     self.assertEqual(
@@ -68,8 +52,6 @@ class TestIndicator(unittest.TestCase):
     def test_result(self) -> None:
         for bk, backend in self.BACKENDS.items():
             for sm in self.SEMANTICS:
-                if self.check_unsupported(backend=bk, semantics=sm):
-                    continue
                 vec1, vec2 = self.vectors(0, 1, backend=backend)
                 for mt in self.indicators(backend=bk, semantics=sm):
                     result = mt(a=vec1, b=vec2)
@@ -97,8 +79,6 @@ class TestIndicator(unittest.TestCase):
     def test_state(self) -> None:
         for bk, backend in self.BACKENDS.items():
             for sm in self.SEMANTICS:
-                if self.check_unsupported(backend=bk, semantics=sm):
-                    continue
                 for mt in self.indicators(backend=bk, semantics=sm):
                     self.assertIsNone(mt.last_result, msg=f"Wrong initial last result on {bk}")
                     self.assertEqual(mt.num_calls, 0, msg=f"Wrong initial number of calls stored on {bk}")
