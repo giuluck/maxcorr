@@ -94,6 +94,20 @@ class TestBackend(unittest.TestCase):
         _, vec = self.vectors()
         self.assertEqual(self.backend.dtype(vec), vec.dtype, msg="Dtype method should return the correct dtype")
 
+    def test_squeeze(self) -> None:
+        # to squeeze
+        ref, vec = self.vectors(shape=(10, 1))
+        ref = np.squeeze(ref).tolist()
+        vec = self.backend.squeeze(vec)
+        self.assertEqual(self.backend.shape(vec), (10,), msg="Squeeze method should return the correct shape")
+        self.assertEqual(self.backend.list(vec), ref, msg="Squeeze method should return correct values")
+        # not to squeeze
+        ref, vec = self.vectors(shape=(5, 2))
+        ref = np.squeeze(ref).tolist()
+        vec = self.backend.squeeze(vec)
+        self.assertEqual(self.backend.shape(vec), (5, 2), msg="Squeeze method should return the correct shape")
+        self.assertEqual(self.backend.list(vec), ref, msg="Squeeze method should return correct values")
+
     def test_reshape(self) -> None:
         ref, vec = self.vectors(shape=10)
         ref = np.reshape(ref, (5, 2)).tolist()
@@ -150,6 +164,20 @@ class TestBackend(unittest.TestCase):
         ref2, vec2 = self.vectors(shape=self.LENGTH, seed=1)
         ref = np.matmul(ref1, ref2)
         vec = self.backend.numpy(self.backend.matmul(v=vec1, w=vec2))
+        self.assertTrue(np.allclose(ref, vec), msg="Matmul method should return the matrix multiplication")
+
+    def test_transpose(self) -> None:
+        # transpose unidimensional
+        ref, vec = self.vectors(shape=self.LENGTH, seed=0)
+        ref = np.transpose(ref)
+        vec = self.backend.numpy(self.backend.transpose(v=vec))
+        self.assertTupleEqual(vec.shape, (1, self.LENGTH), msg="Transpose method should return correct shape")
+        self.assertTrue(np.allclose(ref, vec), msg="Matmul method should return the matrix multiplication")
+        # transpose bidimensional
+        ref, vec = self.vectors(shape=(self.NUM, self.LENGTH), seed=0)
+        ref = np.transpose(ref)
+        vec = self.backend.numpy(self.backend.transpose(v=vec))
+        self.assertTupleEqual(vec.shape, (self.LENGTH, self.NUM), msg="Transpose method should return correct shape")
         self.assertTrue(np.allclose(ref, vec), msg="Matmul method should return the matrix multiplication")
 
     def test_maximum(self) -> None:

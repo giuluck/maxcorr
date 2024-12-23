@@ -15,7 +15,11 @@ from cfair.typing import BackendType, SemanticsType
 
 
 class RandomizedIndicator(Indicator):
-    """Fairness indicator computed using the randomized dependence coefficient (RDC)."""
+    """Indicator computed using the Randomized Dependence Coefficient (RDC).
+
+    The computation relies on numpy, therefore no gradient information is returned for any backend.
+    Moreover, this indicator supports univariate input data only.
+    """
 
     def __init__(self,
                  functions: Callable[[np.ndarray], np.ndarray] = np.sin,
@@ -76,6 +80,10 @@ class RandomizedIndicator(Indicator):
         return self._function(v)
 
     def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+        a = self.backend.squeeze(a)
+        b = self.backend.squeeze(b)
+        if self.backend.ndim(a) != 1 or self.backend.ndim(b) != 1:
+            raise ValueError('RandomizedIndicator can only handle one-dimensional vectors')
         value = RandomizedIndicator._rdc(
             x=self.backend.numpy(a),
             y=self.backend.numpy(b),

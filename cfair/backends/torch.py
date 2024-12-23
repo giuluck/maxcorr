@@ -37,6 +37,9 @@ class TorchBackend(Backend):
     def matmul(self, v, w) -> Any:
         return self._backend.matmul(v, w)
 
+    def transpose(self, v: Any) -> Any:
+        return self.reshape(v, shape=(self.len(v), -1)).T
+
     def mean(self, v, axis: Union[None, int, Iterable[int]] = None) -> Any:
         kwargs = dict() if axis is None else dict(dim=axis)
         return self._backend.mean(v, **kwargs)

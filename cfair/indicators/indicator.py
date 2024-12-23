@@ -7,9 +7,7 @@ from cfair.typing import BackendType, SemanticsType
 
 
 class Indicator:
-    """Interface of a fairness indicator for continuous attributes.
-
-    The definition of the indicators are based on three semantics obtained by projecting the input vectors into a
+    """Interface of a correlation indicator based on three semantics obtained by projecting the input vectors into a
     non-linear mapping space. The first vector (a) is mapped into its projection (x) defined as:
         x = fa * std(a), where mean(fa) = 0 and std(fa) = 1
     while the second vector (b) is mapped into its projection (y) defined as:
@@ -64,6 +62,9 @@ class Indicator:
 
         num_call: int = field()
         """The n-th time at which the indicator instance that generated the result was called."""
+
+        def __repr__(self) -> str:
+            return f"Result(value={self.value})"
 
     def __init__(self, backend: Union[Backend, BackendType], semantics: SemanticsType):
         """
@@ -133,7 +134,7 @@ class Indicator:
             A scalar value representing the computed indicator value, optionally with gradient information attached."""
         return self(a=a, b=b).value
 
-    def __call__(self, a, b) -> Any:
+    def __call__(self, a, b) -> Result:
         """Computes the indicator.
 
         :param a:
@@ -146,7 +147,8 @@ class Indicator:
             A `Result` instance containing the computed indicator value together with additional information.
         """
         bk = self.backend
-        assert bk.ndim(a) == bk.ndim(b) == 1, f"Expected vectors with one dimension, got {bk.ndim(a)} and {bk.ndim(b)}"
+        assert bk.ndim(a) <= 2, f"Expected input data of at most two dimensions, got <a> with {bk.ndim(a)} dimensions"
+        assert bk.ndim(b) <= 2, f"Expected input data of at most two dimensions, got <b> with {bk.ndim(b)} dimensions"
         assert bk.len(a) == bk.len(b), f"Input vectors must have the same dimension, got {bk.len(a)} != {bk.len(b)}"
         self._num_calls += 1
         value, kwargs = self._value(a=bk.cast(a, dtype=float), b=bk.cast(b, dtype=float))
@@ -179,7 +181,7 @@ class Indicator:
 
 
 class CopulaIndicator(Indicator):
-    """Interface of a fairness indicator for continuous attributes using copula transformations."""
+    """Interface of an indicator that computes the value using copula transformations."""
 
     def __init__(self, backend: Union[Backend, BackendType], semantics: SemanticsType, eps: float):
         """

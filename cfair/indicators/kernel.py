@@ -6,10 +6,12 @@ containing the code of the paper: https://github.com/giuluck/GeneralizedDisparat
 
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
+from itertools import chain, combinations_with_replacement
 from typing import Tuple, Optional, List, Any, Union, Callable, Dict
 
 import numpy as np
 import scipy
+from math import prod
 from scipy.optimize import NonlinearConstraint, minimize
 
 from cfair.backends import Backend
@@ -18,7 +20,10 @@ from cfair.typing import BackendType, SemanticsType
 
 
 class KernelBasedIndicator(CopulaIndicator):
-    """Kernel-based indicator computed using user-defined kernels to approximate the copula transformations."""
+    """Kernel-based indicator computed using user-defined kernels to approximate the copula transformations.
+
+    The computation is native in any backend, therefore gradient information is always retrieved when possible.
+    """
 
     @dataclass(frozen=True, init=True, repr=False, eq=False)
     class Result(CopulaIndicator.Result):
@@ -86,6 +91,10 @@ class KernelBasedIndicator(CopulaIndicator):
         # override method to change output type to KernelBasedIndicator.Result
         return super(KernelBasedIndicator, self).last_result
 
+    def __call__(self, a, b) -> Result:
+        # override method to change output type to KernelBasedIndicator.Result
+        return super(KernelBasedIndicator, self).__call__(a, b)
+
     @property
     def alpha(self) -> List[float]:
         """The alpha vector computed in the last execution."""
@@ -126,13 +135,13 @@ class KernelBasedIndicator(CopulaIndicator):
     def _f(self, a) -> Any:
         kernel = self.backend.stack(self.kernel_a(a), axis=1)
         # noinspection PyUnresolvedReferences
-        alpha = self.backend.cast(self.last_result.alpha)
+        alpha = self.backend.cast(self.last_result.alpha, dtype=self.backend.dtype(a))
         return self.backend.matmul(kernel, alpha)
 
     def _g(self, b) -> Any:
         kernel = self.backend.stack(self.kernel_b(b), axis=1)
         # noinspection PyUnresolvedReferences
-        beta = self.backend.cast(self.last_result.beta)
+        beta = self.backend.cast(self.last_result.beta, dtype=self.backend.dtype(b))
         return self.backend.matmul(kernel, beta)
 
     def _indices(self, f: list, g: list) -> Tuple[Tuple[list, List[int]], Tuple[list, List[int]]]:
@@ -202,8 +211,11 @@ class KernelBasedIndicator(CopulaIndicator):
                 a0: Optional,
                 b0: Optional) -> Tuple[Any, List[float], List[float]]:
         # build the kernel matrices, compute their original degrees, and get the linearly independent indices
-        f = self.kernel_a(a) if kernel_a else [a]
-        g = self.kernel_b(b) if kernel_b else [b]
+        # if the kernels should not be used, create a list of input features by transposing the vector/matrix
+        # and then taking each column as a single vector in the list in order to allow for multidimensional inputs
+        n = self.backend.len(a)
+        f = self.kernel_a(a) if kernel_a else [v for v in self.backend.transpose(a)]
+        g = self.kernel_b(b) if kernel_b else [v for v in self.backend.transpose(b)]
         (f_slim, f_indices), (g_slim, g_indices) = self._indices(f=f, g=g)
         # compute the slim matrices and the respective degrees
         f_slim = self.backend.stack(f_slim, axis=1)
@@ -230,7 +242,6 @@ class KernelBasedIndicator(CopulaIndicator):
             alpha = self.backend.lstsq(A=f_slim, b=self.backend.reshape(g_slim, shape=-1))
             alpha_numpy = self.backend.numpy(alpha)
         else:
-            n = len(a)
             f_numpy = self.backend.numpy(f_slim)
             g_numpy = self.backend.numpy(g_slim)
             fg_numpy = np.concatenate((f_slim, -g_slim), axis=1)
@@ -304,9 +315,22 @@ class KernelBasedIndicator(CopulaIndicator):
         # return the results, converting alpha and beta to lists of floats
         return value, [float(v) for v in alpha_full], [float(v) for v in beta_full]
 
+    @staticmethod
+    def _poly_kernel(v, degree: int, backend: Backend) -> list:
+        # build the polynomial kernel expansion from the input vector <v>
+        if backend.ndim(v) == 1:
+            return [v ** d for d in np.arange(degree) + 1]
+        else:
+            _, features = backend.shape(v)
+            iterables = [combinations_with_replacement(range(features), d + 1) for d in range(degree)]
+            return [prod([v[:, i] for i in indices]) for indices in chain.from_iterable(iterables)]
+
 
 class DoubleKernelIndicator(KernelBasedIndicator, ABC):
-    """Kernel-based indicator computed using two different explicit kernels for the variables."""
+    """Kernel-based indicator computed using two different explicit kernels for the variables.
+
+    The computation is native in any backend, therefore gradient information is always retrieved when possible.
+    """
 
     def __init__(self,
                  kernel_a: Union[int, Callable[[Any], list]] = 3,
@@ -364,10 +388,10 @@ class DoubleKernelIndicator(KernelBasedIndicator, ABC):
         # handle kernels
         if isinstance(kernel_a, int):
             degree_a = kernel_a
-            kernel_a = lambda a: [a ** d for d in np.arange(degree_a) + 1]
+            kernel_a = lambda a: KernelBasedIndicator._poly_kernel(a, degree=degree_a, backend=self.backend)
         if isinstance(kernel_b, int):
             degree_b = kernel_b
-            kernel_b = lambda b: [b ** d for d in np.arange(degree_b) + 1]
+            kernel_b = lambda b: KernelBasedIndicator._poly_kernel(b, degree=degree_b, backend=self.backend)
         self._kernel_a: Callable[[Any], list] = kernel_a
         self._kernel_b: Callable[[Any], list] = kernel_b
 
@@ -385,7 +409,10 @@ class DoubleKernelIndicator(KernelBasedIndicator, ABC):
 
 
 class SingleKernelIndicator(KernelBasedIndicator, ABC):
-    """Kernel-based indicator computed using a single kernel for the variables, then taking the maximal value."""
+    """Kernel-based indicator computed using a single kernel for the variables, then taking the maximal value.
+
+    The computation is native in any backend, therefore gradient information is always retrieved when possible.
+    """
 
     def __init__(self,
                  kernel: Union[int, Callable[[Any], list]] = 3,
@@ -439,7 +466,7 @@ class SingleKernelIndicator(KernelBasedIndicator, ABC):
         # handle kernel
         if isinstance(kernel, int):
             degree = kernel
-            kernel = lambda x: [x ** d for d in np.arange(degree) + 1]
+            kernel = lambda x: KernelBasedIndicator._poly_kernel(x, degree=degree, backend=self.backend)
         self._kernel: Callable[[Any], list] = kernel
 
     def kernel(self, x) -> list:
@@ -460,11 +487,11 @@ class SingleKernelIndicator(KernelBasedIndicator, ABC):
         if val_a > val_b:
             value = val_a
             alpha = alpha_a
-            degree = len(alpha)
-            beta = np.concatenate((beta_a, np.zeros(degree - 1)))
+            padding = len(beta_b) - len(beta_a)
+            beta = np.concatenate((beta_a, np.zeros(padding)))
         else:
             value = val_b
             beta = beta_b
-            degree = len(beta)
-            alpha = np.concatenate((alpha_b, np.zeros(degree - 1)))
+            padding = len(alpha_a) - len(alpha_b)
+            alpha = np.concatenate((alpha_b, np.zeros(padding)))
         return value, dict(alpha=alpha, beta=beta)

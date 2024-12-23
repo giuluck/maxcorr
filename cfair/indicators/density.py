@@ -3,6 +3,7 @@ Implementations of the method from "Fairness-Aware Learning for Continuous Attri
 Clément Calauzènes, and Noureddine El Karoui. The code has been partially taken and reworked from the repository
 containing the code of the paper: https://github.com/criteo-research/continuous-fairness/.
 """
+import importlib.util
 from abc import ABC
 from typing import Union, Any, Tuple, Dict
 
@@ -16,7 +17,11 @@ from cfair.typing import BackendType, SemanticsType
 
 
 class DensityIndicator(Indicator, ABC):
-    """Fairness indicator computed using kernel density estimation techniques."""
+    """Indicator computed using kernel density estimation techniques.
+
+    The computation relies on torch, therefore a compatible version must be installed and no gradient information is
+    returned if the chosen backend is Tensorflow. Moreover, this indicator supports univariate input data only.
+    """
 
     def __init__(self,
                  backend: Union[Backend, BackendType] = 'numpy',
@@ -37,6 +42,9 @@ class DensityIndicator(Indicator, ABC):
             The correction factor used in the computation of joint correlation.
         """
         super(DensityIndicator, self).__init__(backend=backend, semantics=semantics)
+        if importlib.util.find_spec('torch') is None:
+            raise ModuleNotFoundError("DensityHGR relies on pytorch independently from any chosen backend. "
+                                      "Please install it via 'pip install torch'.")
         self._chi_square: bool = chi_square
         self._damping: float = damping
 
@@ -51,6 +59,10 @@ class DensityIndicator(Indicator, ABC):
         return self._damping
 
     def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+        a = self.backend.squeeze(a)
+        b = self.backend.squeeze(b)
+        if self.backend.ndim(a) != 1 or self.backend.ndim(b) != 1:
+            raise ValueError('DensityIndicator can only handle one-dimensional vectors')
         method = DensityIndicator.chi_2 if self.chi_square else DensityIndicator.hgr
         if isinstance(self.backend, TorchBackend):
             value = method(X=a, Y=b, density=DensityIndicator.kde, damping=self.damping)

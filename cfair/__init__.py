@@ -1,11 +1,8 @@
 from typing import Union
 
 from cfair.backends import Backend
-from cfair.indicators import RandomizedIndicator
-from cfair.indicators.density import DensityIndicator
-from cfair.indicators.indicator import Indicator
-from cfair.indicators.kernel import DoubleKernelIndicator, SingleKernelIndicator
-from cfair.indicators.neural import NeuralIndicator
+from cfair.indicators import Indicator, DoubleKernelIndicator, SingleKernelIndicator, NeuralIndicator, \
+    DensityIndicator, RandomizedIndicator
 from cfair.typing import BackendType, SemanticsType, AlgorithmType
 
 
@@ -13,7 +10,7 @@ def indicator(backend: Union[Backend, BackendType],
               semantics: SemanticsType,
               algorithm: AlgorithmType,
               **kwargs) -> Indicator:
-    """Builds the instance of a fairness indicator for continuous attributes using the given indicator semantics.
+    """Builds the instance of an indicator for continuous attributes using the given indicator semantics.
 
     :param backend:
         The backend to use, or its alias.

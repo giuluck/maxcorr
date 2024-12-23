@@ -160,6 +160,17 @@ class Backend:
         """
         return v.dtype
 
+    def squeeze(self, v) -> Any:
+        """Removes all the unitary dimensions of a multidimensional vector.
+
+        :param v:
+            The input multidimensional vector.
+
+        :return:
+            The output multidimensional vector.
+        """
+        return self._backend.squeeze(v)
+
     def reshape(self, v, shape: Union[int, Iterable[int]]) -> Any:
         """Reshapes the vector to the given shape.
 
@@ -271,6 +282,18 @@ class Backend:
             The vector product <v, w>.
         """
         pass
+
+    def transpose(self, v: Any) -> Any:
+        """Transposes a vector/matrix.
+
+        :param v:
+            The input vector/matrix.
+
+        :return:
+            The transposed vector/matrix.
+        """
+        v = self.reshape(v, shape=(self.len(v), -1))
+        return self._backend.transpose(v)
 
     def maximum(self, v, w) -> Any:
         """Computes the element-wise maximum between two vectors.
