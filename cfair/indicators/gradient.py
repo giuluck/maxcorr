@@ -173,6 +173,7 @@ class NeuralIndicator(GradientIndicator):
                  num_features: Tuple[int, int] = (1, 1),
                  epochs_start: int = 1000,
                  epochs_successive: Optional[int] = 50,
+                 learning_rate: float = 0.0005,
                  eps: float = 1e-9):
         """
         :param f_units:
@@ -195,6 +196,9 @@ class NeuralIndicator(GradientIndicator):
 
         :param epochs_successive:
             The number of training epochs in the subsequent calls (fine-tuning of the pre-trained networks).
+
+        :param learning_rate:
+            The learning rate of the Adam optimizer.
 
         :param eps:
             The epsilon value used to avoid division by zero in case of null standard deviation.
@@ -223,8 +227,8 @@ class NeuralIndicator(GradientIndicator):
         super(NeuralIndicator, self).__init__(
             backend=backend,
             semantics=semantics,
-            f=build_fn(units=f_units, dim=num_features[0], name='f'),
-            g=build_fn(units=g_units, dim=num_features[1], name='g'),
+            f=build_fn(units=f_units, dim=num_features[0], lr=learning_rate, name='f'),
+            g=build_fn(units=g_units, dim=num_features[1], lr=learning_rate, name='g'),
             train_fn=train_fn,
             epochs_start=epochs_start,
             epochs_successive=epochs_successive,
@@ -232,6 +236,7 @@ class NeuralIndicator(GradientIndicator):
         )
         self._unitsF: Optional[Tuple[int]] = None if f_units is None else tuple(f_units)
         self._unitsG: Optional[Tuple[int]] = None if g_units is None else tuple(g_units)
+        self._learning_rate: float = learning_rate
         self._training_backend: Backend = training_backend
 
     @property
@@ -248,8 +253,13 @@ class NeuralIndicator(GradientIndicator):
         """The hidden units of the G copula network, or None if no G copula network."""
         return self._unitsG
 
+    @property
+    def learning_rate(self) -> float:
+        """The learning rate of the Adam optimizer."""
+        return self._learning_rate
+
     @staticmethod
-    def _build_torch(units: Optional[Iterable[int]], dim: int, name: str) -> Tuple[Any, Any, int]:
+    def _build_torch(units: Optional[Iterable[int]], dim: int, lr: float, name: str) -> Tuple[Any, Any, int]:
         from torch.nn import Linear, Sequential, ReLU
         from torch.optim import Adam
         if units is None:
@@ -262,11 +272,11 @@ class NeuralIndicator(GradientIndicator):
             for inp, out in zip(units[:-1], units[1:]):
                 layers += [Linear(inp, out), ReLU()]
             network = Sequential(*layers, Linear(units[-1], 1))
-            optimizer = Adam(network.parameters(), lr=0.0005)
+            optimizer = Adam(network.parameters(), lr=lr)
         return network, optimizer, dim
 
     @staticmethod
-    def _build_tensorflow(units: Optional[Iterable[int]], dim: int, name: str) -> Tuple[Any, Any, int]:
+    def _build_tensorflow(units: Optional[Iterable[int]], dim: int, lr: float, name: str) -> Tuple[Any, Any, int]:
         from tensorflow.keras import Sequential
         from tensorflow.keras.layers import Dense
         from tensorflow.keras.optimizers import Adam
@@ -275,10 +285,8 @@ class NeuralIndicator(GradientIndicator):
             network = NeuralIndicator._DummyNetwork()
             optimizer = NeuralIndicator._DummyOptimizer()
         else:
-            units = [dim, *units]
-            layers = [Dense(out, input_dim=inp, activation='relu') for inp, out in zip(units[:-1], units[1:])]
-            network = Sequential([*layers, Dense(1, input_dim=units[-1])])
-            optimizer = Adam(learning_rate=0.0005)
+            network = Sequential([Dense(out, activation='relu') for out in units] + [Dense(1)])
+            optimizer = Adam(learning_rate=lr)
         return network, optimizer, dim
 
 
@@ -290,12 +298,13 @@ class LatticeIndicator(GradientIndicator):
     """
 
     def __init__(self,
-                 f_sizes: Optional[Iterable[int]] = (25,),
-                 g_sizes: Optional[Iterable[int]] = (25,),
+                 f_sizes: Optional[Iterable[int]] = (20,),
+                 g_sizes: Optional[Iterable[int]] = (20,),
                  backend: Union[Backend, BackendType] = 'numpy',
                  semantics: SemanticsType = 'hgr',
                  epochs_start: int = 1000,
                  epochs_successive: Optional[int] = 50,
+                 learning_rate: float = 0.01,
                  eps: float = 1e-9,
                  f_kwargs: Optional[Dict[str, Any]] = None,
                  g_kwargs: Optional[Dict[str, Any]] = None):
@@ -334,8 +343,8 @@ class LatticeIndicator(GradientIndicator):
         super(LatticeIndicator, self).__init__(
             backend=backend,
             semantics=semantics,
-            f=self._build_model(sizes=f_sizes, kwargs=f_kwargs),
-            g=self._build_model(sizes=g_sizes, kwargs=g_kwargs),
+            f=self._build_model(sizes=f_sizes, lr=learning_rate, kwargs=f_kwargs),
+            g=self._build_model(sizes=g_sizes, lr=learning_rate, kwargs=g_kwargs),
             train_fn=self._train_tensorflow,
             epochs_start=epochs_start,
             epochs_successive=epochs_successive,
@@ -343,6 +352,7 @@ class LatticeIndicator(GradientIndicator):
         )
         self._sizesF: Optional[Tuple[int, ...]] = None if f_sizes is None else tuple(f_sizes)
         self._sizesG: Optional[Tuple[int, ...]] = None if g_sizes is None else tuple(g_sizes)
+        self._learning_rate: float = learning_rate
 
     @property
     def training_backend(self) -> Backend:
@@ -358,9 +368,15 @@ class LatticeIndicator(GradientIndicator):
         """The number of keypoints along each dimension of the G copula model, or None for no model."""
         return self._sizesG
 
+    @property
+    def learning_rate(self) -> float:
+        """The learning rate of the Adam optimizer."""
+        return self._learning_rate
+
     @staticmethod
-    def _build_model(sizes: Optional[Iterable[int]], kwargs: Optional[Dict[str, Any]]) -> Tuple[Any, Any, int]:
-        from tensorflow.keras import Sequential
+    def _build_model(sizes: Optional[Iterable[int]],
+                     lr: float,
+                     kwargs: Optional[Dict[str, Any]]) -> Tuple[Any, Any, int]:
         from tensorflow.keras.optimizers import Adam
         from tensorflow_lattice.layers import Lattice
         if sizes is None:
@@ -370,6 +386,6 @@ class LatticeIndicator(GradientIndicator):
         else:
             dim = len(list(sizes))
             kwargs = dict() if kwargs is None else kwargs
-            model = Sequential([Lattice(lattice_sizes=sizes, units=1, **kwargs)])
-            optimizer = Adam(learning_rate=0.0005)
+            model = Lattice(lattice_sizes=sizes, units=1, **kwargs)
+            optimizer = Adam(learning_rate=lr)
         return model, optimizer, dim

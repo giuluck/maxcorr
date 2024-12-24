@@ -3,7 +3,7 @@ __pycache__
 .idea
 .eggs
 *.egg-info
-venv
+venv*
 temp
 dist
 build
