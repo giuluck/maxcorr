@@ -100,7 +100,7 @@ class GradientIndicator(CopulaIndicator):
         gb = self.training_backend.reshape(gb, shape=n)
         return self.training_backend.numpy(gb) if isinstance(self.backend, NumpyBackend) else gb
 
-    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+    def _compute(self, a, b) -> Tuple[Any, Dict[str, Any]]:
         # cast the vectors to the neural backend type
         n, da, db = self.backend.len(a), self.f_dimension, self.g_dimension
         a_cast = self.training_backend.reshape(self.training_backend.cast(a, dtype=float), shape=(n, da))
@@ -108,8 +108,7 @@ class GradientIndicator(CopulaIndicator):
         for _ in range(self._epochs_start if self.num_calls == 0 else self._epochs_successive):
             self._train_fn(a_cast, b_cast)
         # compute the indicator value as the absolute value of the (mean) vector product
-        # (since vectors are standardized) multiplied by the scaling factor
-        value = self.training_backend.abs(self._hgr(a=a_cast, b=b_cast)) * self._factor(a, b)
+        value = self.training_backend.abs(self._hgr(a=a_cast, b=b_cast))
         # return the result instance cast to the correct type
         if not isinstance(self.backend, self.training_backend.__class__):
             value = self.backend.cast(self.training_backend.item(value), dtype=self.backend.dtype(a))
@@ -279,7 +278,7 @@ class NeuralIndicator(GradientIndicator):
     def _build_tensorflow(units: Optional[Iterable[int]], dim: int, lr: float, name: str) -> Tuple[Any, Any, int]:
         from tensorflow.keras import Sequential
         from tensorflow.keras.layers import Dense
-        from tensorflow.keras.optimizers import Adam
+        from tensorflow.keras.optimizers.legacy import Adam
         if units is None:
             assert dim == 1, f"Transformation {name} is required since its input vector is multidimensional"
             network = NeuralIndicator._DummyNetwork()
@@ -377,7 +376,7 @@ class LatticeIndicator(GradientIndicator):
     def _build_model(sizes: Optional[Iterable[int]],
                      lr: float,
                      kwargs: Optional[Dict[str, Any]]) -> Tuple[Any, Any, int]:
-        from tensorflow.keras.optimizers import Adam
+        from tensorflow.keras.optimizers.legacy import Adam
         from tensorflow_lattice.layers import Lattice
         if sizes is None:
             dim = 1

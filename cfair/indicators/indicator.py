@@ -151,7 +151,7 @@ class Indicator:
         assert bk.ndim(b) <= 2, f"Expected input data of at most two dimensions, got <b> with {bk.ndim(b)} dimensions"
         assert bk.len(a) == bk.len(b), f"Input vectors must have the same dimension, got {bk.len(a)} != {bk.len(b)}"
         self._num_calls += 1
-        value, kwargs = self._value(a=bk.cast(a, dtype=float), b=bk.cast(b, dtype=float))
+        value, kwargs = self._compute(a=bk.cast(a, dtype=float), b=bk.cast(b, dtype=float))
         # noinspection PyArgumentList
         result = self.Result(
             a=a,
@@ -165,7 +165,7 @@ class Indicator:
         return result
 
     @abstractmethod
-    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+    def _compute(self, a, b) -> Tuple[Any, Dict[str, Any]]:
         """Computes the value of the indicator.
 
         :param a:

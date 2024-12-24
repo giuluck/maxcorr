@@ -79,7 +79,7 @@ class RandomizedIndicator(Indicator):
         """
         return self._function(v)
 
-    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+    def _compute(self, a, b) -> Tuple[Any, Dict[str, Any]]:
         a = self.backend.squeeze(a)
         b = self.backend.squeeze(b)
         if self.backend.ndim(a) != 1 or self.backend.ndim(b) != 1:

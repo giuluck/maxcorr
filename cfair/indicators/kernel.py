@@ -301,10 +301,9 @@ class KernelBasedIndicator(CopulaIndicator):
             alpha = self.backend.cast(alpha_numpy, dtype=self.backend.dtype(f_slim))
             beta = self.backend.cast(beta_numpy, dtype=self.backend.dtype(g_slim))
         # compute the indicator value as the absolute value of the (mean) vector product
-        # (since vectors are standardized) multiplied by the scaling factor
         fa = self.backend.standardize(self.backend.matmul(f_slim, alpha), eps=self.eps)
         gb = self.backend.standardize(self.backend.matmul(g_slim, beta), eps=self.eps)
-        value = self.backend.mean(fa * gb) * self._factor(a, b)
+        value = self.backend.mean(fa * gb)
         # reconstruct alpha and beta by adding zeros for the ignored indices, and normalize for ease of comparison
         alpha_full = np.zeros(len(f))
         alpha_full[f_indices] = alpha_numpy
@@ -401,7 +400,7 @@ class DoubleKernelIndicator(KernelBasedIndicator, ABC):
     def kernel_b(self, b) -> list:
         return self._kernel_b(b)
 
-    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+    def _compute(self, a, b) -> Tuple[Any, Dict[str, Any]]:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
         value, alpha, beta = self._result(a=a, b=b, kernel_a=True, kernel_b=True, a0=a0, b0=b0)
@@ -479,7 +478,7 @@ class SingleKernelIndicator(KernelBasedIndicator, ABC):
     def kernel_b(self, b) -> list:
         return self.kernel(b)
 
-    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+    def _compute(self, a, b) -> Tuple[Any, Dict[str, Any]]:
         # noinspection PyUnresolvedReferences
         a0, b0 = (None, None) if self.last_result is None else (self.last_result.alpha, self.last_result.beta)
         val_a, alpha_a, beta_a = self._result(a=a, b=b, kernel_a=True, kernel_b=False, a0=a0, b0=None)

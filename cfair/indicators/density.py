@@ -8,7 +8,6 @@ from abc import ABC
 from typing import Union, Any, Tuple, Dict
 
 import numpy as np
-import torch
 from math import pi, sqrt
 
 from cfair.backends import Backend, TorchBackend
@@ -58,7 +57,8 @@ class DensityIndicator(Indicator, ABC):
         """The correction factor used in the computation of joint correlation."""
         return self._damping
 
-    def _value(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+    def _compute(self, a, b) -> Tuple[Any, Dict[str, Any]]:
+        import torch
         a = self.backend.squeeze(a)
         b = self.backend.squeeze(b)
         if self.backend.ndim(a) != 1 or self.backend.ndim(b) != 1:
@@ -76,6 +76,7 @@ class DensityIndicator(Indicator, ABC):
     # noinspection PyPep8Naming
     @staticmethod
     def _joint_2(X, Y, density, damping=1e-10):
+        import torch
         X = (X - X.mean()) / X.std()
         Y = (Y - Y.mean()) / Y.std()
         data = torch.cat([X.unsqueeze(-1), Y.unsqueeze(-1)], -1)
@@ -104,6 +105,7 @@ class DensityIndicator(Indicator, ABC):
         :param density: so far only kde is supported
         :return: numerical value between 0 and 1 (0: independent, 1:linked by a deterministic equation)
         """
+        import torch
         h2d = DensityIndicator._joint_2(X, Y, density, damping=damping)
         marginal_x = h2d.sum(dim=1).unsqueeze(1)
         marginal_y = h2d.sum(dim=0).unsqueeze(0)
@@ -122,6 +124,7 @@ class DensityIndicator(Indicator, ABC):
         :param density: so far only kde is supported
         :return: numerical value between 0 and \infty (0: independent)
         """
+        import torch
         h2d = DensityIndicator._joint_2(X, Y, density, damping=damping)
         marginal_x = h2d.sum(dim=1).unsqueeze(1)
         marginal_y = h2d.sum(dim=0).unsqueeze(0)
@@ -131,6 +134,7 @@ class DensityIndicator(Indicator, ABC):
     # noinspection PyPep8Naming
     @staticmethod
     def _joint_3(X, Y, Z, density, damping=1e-10):
+        import torch
         X = (X - X.mean()) / X.std()
         Y = (Y - Y.mean()) / Y.std()
         Z = (Z - Z.mean()) / Z.std()
@@ -162,6 +166,7 @@ class DensityIndicator(Indicator, ABC):
         :param density: so far only kde is supported
         :return: A torch 1-D Tensor of same size as Z. (0: independent, 1:linked by a deterministic equation)
         """
+        import torch
         damping = 1e-10
         h3d = DensityIndicator._joint_3(X, Y, Z, density, damping=damping)
         marginal_xz = h3d.sum(dim=1).unsqueeze(1)
@@ -183,6 +188,7 @@ class DensityIndicator(Indicator, ABC):
         :param density: so far only kde is supported
         :return: A torch 1-D Tensor of same size as Z. (0: independent)
         """
+        import torch
         damping = 0
         h3d = DensityIndicator._joint_3(X, Y, Z, density, damping=damping)
         marginal_xz = h3d.sum(dim=1).unsqueeze(1)
@@ -211,6 +217,7 @@ class DensityIndicator(Indicator, ABC):
             self.train_x = x_train
 
         def pdf(self, x):
+            import torch
             s = x.shape
             d = s[-1]
             s = s[:-1]
