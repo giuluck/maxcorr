@@ -21,7 +21,8 @@ class NumpyBackend(Backend):
         return np.ndarray
 
     def cast(self, v, dtype=None) -> Any:
-        return self._backend.array(v, dtype=dtype)
+        v = self._backend.array(v, dtype=dtype)
+        return self.item(v) if v.ndim == 0 else v
 
     def item(self, v) -> float:
         return float(v.item())

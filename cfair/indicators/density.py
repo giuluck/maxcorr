@@ -43,7 +43,7 @@ class DensityIndicator(Indicator, ABC):
         """
         super(DensityIndicator, self).__init__(backend=backend, semantics=semantics)
         if importlib.util.find_spec('torch') is None:
-            raise ModuleNotFoundError("DensityHGR relies on pytorch independently from any chosen backend. "
+            raise ModuleNotFoundError("DensityIndicator relies on pytorch independently from any chosen backend. "
                                       "Please install it via 'pip install torch'.")
         self._chi_square: bool = chi_square
         self._damping: float = damping

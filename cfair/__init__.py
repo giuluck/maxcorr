@@ -2,7 +2,7 @@ from typing import Union
 
 from cfair.backends import Backend
 from cfair.indicators import Indicator, DoubleKernelIndicator, SingleKernelIndicator, NeuralIndicator, \
-    DensityIndicator, RandomizedIndicator
+    LatticeIndicator, DensityIndicator, RandomizedIndicator
 from cfair.typing import BackendType, SemanticsType, AlgorithmType
 
 
@@ -35,6 +35,8 @@ def indicator(backend: Union[Backend, BackendType],
         return DensityIndicator(backend=backend, semantics=semantics, **kwargs)
     elif algorithm in ['rdc', 'randomized']:
         return RandomizedIndicator(backend=backend, semantics=semantics, **kwargs)
+    elif algorithm in ['lat', 'lattice']:
+        return LatticeIndicator(backend=backend, semantics=semantics, **kwargs)
     else:
         raise AssertionError(f"Unsupported algorithm '{algorithm}'")
 

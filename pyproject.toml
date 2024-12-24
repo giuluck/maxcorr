@@ -34,6 +34,15 @@ torch = [
 tensorflow = [
     'tensorflow >= 2.13'
 ]
+lattice = [
+    'tensorflow >= 2.13',
+    'tensorflow-lattice >= 2.0.9'
+]
+full = [
+    'torch >= 1.12',
+    'tensorflow >= 2.13',
+    'tensorflow-lattice >= 2.0.9'
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ['cfair']
