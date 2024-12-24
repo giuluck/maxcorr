@@ -278,7 +278,7 @@ class NeuralIndicator(GradientIndicator):
     def _build_tensorflow(units: Optional[Iterable[int]], dim: int, lr: float, name: str) -> Tuple[Any, Any, int]:
         from tensorflow.keras import Sequential
         from tensorflow.keras.layers import Dense
-        from tensorflow.keras.optimizers.legacy import Adam
+        from tensorflow.keras.optimizers import Adam
         if units is None:
             assert dim == 1, f"Transformation {name} is required since its input vector is multidimensional"
             network = NeuralIndicator._DummyNetwork()
@@ -376,7 +376,7 @@ class LatticeIndicator(GradientIndicator):
     def _build_model(sizes: Optional[Iterable[int]],
                      lr: float,
                      kwargs: Optional[Dict[str, Any]]) -> Tuple[Any, Any, int]:
-        from tensorflow.keras.optimizers.legacy import Adam
+        from tensorflow.keras.optimizers import Adam
         from tensorflow_lattice.layers import Lattice
         if sizes is None:
             dim = 1
