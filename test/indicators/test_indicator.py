@@ -5,9 +5,9 @@ from typing import Type, List, Dict, Union, Tuple, Iterable, Any
 import numpy as np
 import pytest
 
-from cfair import BackendType, SemanticsType
-from cfair.backends import Backend, NumpyBackend, TensorflowBackend, TorchBackend
-from cfair.indicators.indicator import Indicator
+from maxcorr import BackendType, SemanticsType
+from maxcorr.backends import Backend, NumpyBackend, TensorflowBackend, TorchBackend
+from maxcorr.indicators.indicator import Indicator
 
 
 class TestIndicator(unittest.TestCase):

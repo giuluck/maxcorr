@@ -2,8 +2,8 @@ from abc import abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional, Callable, Union, Tuple, Dict
 
-from cfair.backends import NumpyBackend, TorchBackend, Backend, TensorflowBackend
-from cfair.typing import BackendType, SemanticsType
+from maxcorr.backends import NumpyBackend, TorchBackend, Backend, TensorflowBackend
+from maxcorr.typing import BackendType, SemanticsType
 
 
 class Indicator:
@@ -17,7 +17,7 @@ class Indicator:
     while we also consider their standardized versions as <fa> and <gb>, respectively. At this point, the three
     semantics simply define three correlation indicators on <x> and <y>, specifically:
 
-        - HGR is the Hirschfield-Gebelin-Renyi indicator, namely the Non-Linear Pearson's correlation. It is computed
+        - HGR is the Hirschfield-Gebelin-Rényi indicator, namely the Non-Linear Pearson's correlation. It is computed
           as the average of the product between the standardized projections without a scaling factor, in fact:
             pearson(x, y) = cov(x, y) / std(x) / std(y) =
                           = cov(x, y) / std(a) / std(b) =

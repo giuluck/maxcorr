@@ -2,7 +2,7 @@ from typing import Any, Type, Optional, Union, Iterable
 
 import numpy as np
 
-from cfair.backends import Backend
+from maxcorr.backends import Backend
 
 
 class NumpyBackend(Backend):

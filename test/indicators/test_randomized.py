@@ -2,8 +2,8 @@ from typing import Type, List, Tuple
 
 import numpy as np
 
-from cfair import BackendType, SemanticsType, RandomizedIndicator
-from cfair.indicators import Indicator
+from maxcorr import BackendType, SemanticsType, RandomizedIndicator
+from maxcorr.indicators import Indicator
 from test.indicators.test_indicator import TestIndicator
 
 

@@ -2,7 +2,7 @@ from typing import Any, Type
 
 import numpy as np
 
-from cfair.backends import Backend, NumpyBackend
+from maxcorr.backends import Backend, NumpyBackend
 from test.backends.test_backend import TestBackend
 
 

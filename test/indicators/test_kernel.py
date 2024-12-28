@@ -1,6 +1,6 @@
 from typing import Type, List, Tuple
 
-from cfair import Indicator, DoubleKernelIndicator, BackendType, SemanticsType, SingleKernelIndicator
+from maxcorr import Indicator, DoubleKernelIndicator, BackendType, SemanticsType, SingleKernelIndicator
 from test.indicators.test_indicator import TestIndicator
 
 

@@ -2,7 +2,7 @@ from typing import Any, Type
 
 import torch
 
-from cfair.backends import Backend, TorchBackend
+from maxcorr.backends import Backend, TorchBackend
 from test.backends.test_backend import TestBackend
 
 

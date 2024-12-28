@@ -2,7 +2,7 @@ from typing import Any, Type
 
 import tensorflow as tf
 
-from cfair.backends import Backend, TensorflowBackend
+from maxcorr.backends import Backend, TensorflowBackend
 from test.backends.test_backend import TestBackend
 
 

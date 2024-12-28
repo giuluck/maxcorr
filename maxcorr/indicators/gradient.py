@@ -1,5 +1,5 @@
 """
-Implementation of the method from "Fairness-Aware Neural Renyi Minimization for Continuous Features" by Vincent Grari,
+Implementation of the method from "Fairness-Aware Neural Rényi Minimization for Continuous Features" by Vincent Grari,
 Sylvain Lamprier and Marcin Detyniecki. The code has been partially taken and reworked from the repository containing
 the code of the paper: https://github.com/fairml-research/HGR_NN/tree/main.
 
@@ -9,9 +9,9 @@ import importlib.util
 from abc import abstractmethod
 from typing import Any, Iterable, Optional, Tuple, Callable, Union, Dict
 
-from cfair.backends import Backend, NumpyBackend, TorchBackend, TensorflowBackend
-from cfair.indicators.indicator import CopulaIndicator
-from cfair.typing import BackendType, SemanticsType
+from maxcorr.backends import Backend, NumpyBackend, TorchBackend, TensorflowBackend
+from maxcorr.indicators.indicator import CopulaIndicator
+from maxcorr.typing import BackendType, SemanticsType
 
 
 class GradientIndicator(CopulaIndicator):
@@ -297,8 +297,8 @@ class LatticeIndicator(GradientIndicator):
     """
 
     def __init__(self,
-                 f_sizes: Optional[Iterable[int]] = (20,),
-                 g_sizes: Optional[Iterable[int]] = (20,),
+                 f_sizes: Union[None, int, Iterable[int]] = 20,
+                 g_sizes: Union[None, int, Iterable[int]] = 20,
                  backend: Union[Backend, BackendType] = 'numpy',
                  semantics: SemanticsType = 'hgr',
                  epochs_start: int = 1000,
@@ -349,8 +349,18 @@ class LatticeIndicator(GradientIndicator):
             epochs_successive=epochs_successive,
             eps=eps
         )
-        self._sizesF: Optional[Tuple[int, ...]] = None if f_sizes is None else tuple(f_sizes)
-        self._sizesG: Optional[Tuple[int, ...]] = None if g_sizes is None else tuple(g_sizes)
+
+        if isinstance(f_sizes, int):
+            f_sizes = (f_sizes,)
+        elif f_sizes is not None:
+            f_sizes = tuple(f_sizes)
+        if isinstance(g_sizes, int):
+            g_sizes = (g_sizes,)
+        elif g_sizes is not None:
+            g_sizes = tuple(g_sizes)
+
+        self._sizesF: Optional[Tuple[int, ...]] = f_sizes
+        self._sizesG: Optional[Tuple[int, ...]] = g_sizes
         self._learning_rate: float = learning_rate
 
     @property

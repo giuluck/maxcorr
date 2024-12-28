@@ -1,9 +1,9 @@
 from typing import Union
 
-from cfair.backends import Backend
-from cfair.indicators import Indicator, DoubleKernelIndicator, SingleKernelIndicator, NeuralIndicator, \
+from maxcorr.backends import Backend
+from maxcorr.indicators import Indicator, DoubleKernelIndicator, SingleKernelIndicator, NeuralIndicator, \
     LatticeIndicator, DensityIndicator, RandomizedIndicator
-from cfair.typing import BackendType, SemanticsType, AlgorithmType
+from maxcorr.typing import BackendType, SemanticsType, AlgorithmType
 
 
 def indicator(backend: Union[Backend, BackendType],
@@ -42,7 +42,7 @@ def indicator(backend: Union[Backend, BackendType],
 
 
 def hgr(backend: Union[Backend, BackendType], algorithm: AlgorithmType = 'dk', **kwargs) -> Indicator:
-    """Builds a Hirschfield-Gebelin-Renyi (HGR) indicator instance.
+    """Builds a Hirschfield-Gebelin-Rényi (HGR) indicator instance.
 
     :param backend:
         The backend to use, or its alias.

@@ -1,7 +1,7 @@
 from typing import Type, List, Tuple
 
-from cfair import NeuralIndicator, BackendType, SemanticsType, LatticeIndicator
-from cfair.indicators import Indicator
+from maxcorr import NeuralIndicator, BackendType, SemanticsType, LatticeIndicator
+from maxcorr.indicators import Indicator
 from test.indicators.test_indicator import TestIndicator
 
 

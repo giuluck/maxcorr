@@ -3,7 +3,7 @@ from typing import Any, Type, Union, Iterable
 
 import numpy as np
 
-from cfair.backends import Backend
+from maxcorr.backends import Backend
 
 
 class TorchBackend(Backend):

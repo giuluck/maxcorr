@@ -1,7 +1,7 @@
 from typing import Type, List, Tuple
 
-from cfair import BackendType, SemanticsType
-from cfair.indicators import Indicator, DensityIndicator
+from maxcorr import BackendType, SemanticsType
+from maxcorr.indicators import Indicator, DensityIndicator
 from test.indicators.test_indicator import TestIndicator
 
 

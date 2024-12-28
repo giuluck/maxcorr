@@ -5,7 +5,7 @@ from typing import Any, Iterable, Union, Type, Tuple
 import numpy as np
 import pytest
 
-from cfair.backends import Backend
+from maxcorr.backends import Backend
 
 
 class TestBackend(unittest.TestCase):

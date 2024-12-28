@@ -1,6 +1,6 @@
 """
 Implementations of the method from "The Randomized Dependence Coefficient" by David Lopez-Paz, Philipp Hennig, and
-Bernhard Schölkopf. The code has been partially taken and reworked from the repository of "Fairness-Aware Neural Renyi
+Bernhard Schölkopf. The code has been partially taken and reworked from the repository of "Fairness-Aware Neural Rényi
 Minimization for Continuous Features", which used it as a baseline: https://github.com/fairml-research/HGR_NN/.
 """
 
@@ -9,9 +9,9 @@ from typing import Dict, Any, Union, Callable, Tuple
 import numpy as np
 from scipy.stats import rankdata
 
-from cfair.backends import Backend
-from cfair.indicators.indicator import Indicator
-from cfair.typing import BackendType, SemanticsType
+from maxcorr.backends import Backend
+from maxcorr.indicators.indicator import Indicator
+from maxcorr.typing import BackendType, SemanticsType
 
 
 class RandomizedIndicator(Indicator):

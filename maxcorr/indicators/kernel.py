@@ -7,16 +7,16 @@ containing the code of the paper: https://github.com/giuluck/GeneralizedDisparat
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from itertools import chain, combinations_with_replacement
+from math import prod
 from typing import Tuple, Optional, List, Any, Union, Callable, Dict
 
 import numpy as np
 import scipy
-from math import prod
 from scipy.optimize import NonlinearConstraint, minimize
 
-from cfair.backends import Backend
-from cfair.indicators.indicator import CopulaIndicator
-from cfair.typing import BackendType, SemanticsType
+from maxcorr.backends import Backend
+from maxcorr.indicators.indicator import CopulaIndicator
+from maxcorr.typing import BackendType, SemanticsType
 
 
 class KernelBasedIndicator(CopulaIndicator):

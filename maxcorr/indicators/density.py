@@ -5,14 +5,14 @@ containing the code of the paper: https://github.com/criteo-research/continuous-
 """
 import importlib.util
 from abc import ABC
+from math import pi, sqrt
 from typing import Union, Any, Tuple, Dict
 
 import numpy as np
-from math import pi, sqrt
 
-from cfair.backends import Backend, TorchBackend
-from cfair.indicators.indicator import Indicator
-from cfair.typing import BackendType, SemanticsType
+from maxcorr.backends import Backend, TorchBackend
+from maxcorr.indicators.indicator import Indicator
+from maxcorr.typing import BackendType, SemanticsType
 
 
 class DensityIndicator(Indicator, ABC):
@@ -97,7 +97,7 @@ class DensityIndicator(Indicator, ABC):
     @staticmethod
     def hgr(X, Y, density, damping=1e-10):
         """
-        An estimator of the Hirschfeld-Gebelein-Renyi maximum correlation coefficient using Witsenhausen’s
+        An estimator of the Hirschfeld-Gebelein-Rényi maximum correlation coefficient using Witsenhausen’s
         Characterization: HGR(x,y) is the second highest eigenvalue of the joint density on (x,y). We compute here the
         second eigenvalue on an empirical and discretized density estimated from the input data.
         :param X: A torch 1-D Tensor
@@ -117,7 +117,7 @@ class DensityIndicator(Indicator, ABC):
     def chi_2(X, Y, density, damping=0):
         """
         The \chi^2 divergence between the joint distribution on (x,y) and the product of marginals. This is know to be
-        the square of an upper-bound on the Hirschfeld-Gebelein-Renyi maximum correlation coefficient. We compute it
+        the square of an upper-bound on the Hirschfeld-Gebelein-Rényi maximum correlation coefficient. We compute it
         here on an empirical and discretized density estimated from the input data.
         :param X: A torch 1-D Tensor
         :param Y: A torch 1-D Tensor
@@ -156,7 +156,7 @@ class DensityIndicator(Indicator, ABC):
     @staticmethod
     def hgr_cond(X, Y, Z, density):
         """
-        An estimator of the function z -> HGR(x|z, y|z) where HGR is the Hirschfeld-Gebelein-Renyi maximum correlation
+        An estimator of the function z -> HGR(x|z, y|z) where HGR is the Hirschfeld-Gebelein-Rényi maximum correlation
         coefficient computed using Witsenhausen’s Characterization: HGR(x,y) is the second highest eigenvalue of the
         joint density on (x,y). We compute here the second eigenvalue on an empirical and discretized density estimated
         from the input data.
@@ -180,7 +180,7 @@ class DensityIndicator(Indicator, ABC):
         """
         An estimator of the function z -> chi^2(x|z, y|z) where \chi^2 is the \chi^2 divergence between the joint
         distribution on (x,y) and the product of marginals. This is know to be the square of an upper-bound on the
-        Hirschfeld-Gebelein-Renyi maximum correlation coefficient. We compute it here on an empirical and discretized
+        Hirschfeld-Gebelein-Rényi maximum correlation coefficient. We compute it here on an empirical and discretized
         density estimated from the input data.
         :param X: A torch 1-D Tensor
         :param Y: A torch 1-D Tensor

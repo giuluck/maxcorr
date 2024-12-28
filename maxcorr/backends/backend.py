@@ -3,7 +3,7 @@ from typing import Tuple, Any, Type, Iterable, Union, Optional
 
 import numpy as np
 
-from cfair.typing import BackendType
+from maxcorr.typing import BackendType
 
 
 class Backend:
