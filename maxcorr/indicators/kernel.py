@@ -16,7 +16,7 @@ from scipy.optimize import NonlinearConstraint, minimize
 
 from maxcorr.backends import Backend
 from maxcorr.indicators.indicator import CopulaIndicator
-from maxcorr.typing import BackendType, SemanticsType
+from maxcorr.typing import BackendType, SemanticsType, AlgorithmType
 
 
 class KernelBasedIndicator(CopulaIndicator):
@@ -133,14 +133,12 @@ class KernelBasedIndicator(CopulaIndicator):
         return self._delta_independent
 
     def _f(self, a) -> Any:
-        kernel = self.backend.stack(self.kernel_a(a), axis=1)
-        # noinspection PyUnresolvedReferences
+        kernel = self.backend.stack([self.backend.center(fi) for fi in self.kernel_a(a)], axis=1)
         alpha = self.backend.cast(self.last_result.alpha, dtype=self.backend.dtype(a))
         return self.backend.matmul(kernel, alpha)
 
     def _g(self, b) -> Any:
-        kernel = self.backend.stack(self.kernel_b(b), axis=1)
-        # noinspection PyUnresolvedReferences
+        kernel = self.backend.stack([self.backend.center(gi) for gi in self.kernel_b(b)], axis=1)
         beta = self.backend.cast(self.last_result.beta, dtype=self.backend.dtype(b))
         return self.backend.matmul(kernel, beta)
 
@@ -217,11 +215,9 @@ class KernelBasedIndicator(CopulaIndicator):
         f = self.kernel_a(a) if kernel_a else [v for v in self.backend.transpose(a)]
         g = self.kernel_b(b) if kernel_b else [v for v in self.backend.transpose(b)]
         (f_slim, f_indices), (g_slim, g_indices) = self._indices(f=f, g=g)
-        # compute the slim matrices and the respective degrees
-        f_slim = self.backend.stack(f_slim, axis=1)
-        f_slim = f_slim - self.backend.mean(f_slim, axis=0)
-        g_slim = self.backend.stack(g_slim, axis=1)
-        g_slim = g_slim - self.backend.mean(g_slim, axis=0)
+        # compute the (centered) slim matrices and the respective degrees
+        f_slim = self.backend.stack([self.backend.center(fi) for fi in f_slim], axis=1)
+        g_slim = self.backend.stack([self.backend.center(gi) for gi in g_slim], axis=1)
         degree_a, degree_b = len(f_indices), len(g_indices)
         # compute the indicator value and the coefficients alpha and beta using the slim matrices
         # handle trivial or simpler cases:
@@ -244,7 +240,7 @@ class KernelBasedIndicator(CopulaIndicator):
         else:
             f_numpy = self.backend.numpy(f_slim)
             g_numpy = self.backend.numpy(g_slim)
-            fg_numpy = np.concatenate((f_slim, -g_slim), axis=1)
+            fg_numpy = np.concatenate((f_numpy, -g_numpy), axis=1)
 
             # define the function to optimize as the least square problem:
             #   - func:   || F @ alpha - G @ beta ||_2^2 =
@@ -331,6 +327,8 @@ class DoubleKernelIndicator(KernelBasedIndicator, ABC):
     The computation is native in any backend, therefore gradient information is always retrieved when possible.
     """
 
+    algorithm: AlgorithmType = 'dk'
+
     def __init__(self,
                  kernel_a: Union[int, Callable[[Any], list]] = 3,
                  kernel_b: Union[int, Callable[[Any], list]] = 3,
@@ -412,6 +410,8 @@ class SingleKernelIndicator(KernelBasedIndicator, ABC):
 
     The computation is native in any backend, therefore gradient information is always retrieved when possible.
     """
+
+    algorithm: AlgorithmType = 'sk'
 
     def __init__(self,
                  kernel: Union[int, Callable[[Any], list]] = 3,

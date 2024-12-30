@@ -6,12 +6,13 @@ the code of the paper: https://github.com/fairml-research/HGR_NN/tree/main.
 It also includes a custom variant of gradient-based indicator using Tensorflow Lattice.
 """
 import importlib.util
+import platform
 from abc import abstractmethod
 from typing import Any, Iterable, Optional, Tuple, Callable, Union, Dict
 
 from maxcorr.backends import Backend, NumpyBackend, TorchBackend, TensorflowBackend
 from maxcorr.indicators.indicator import CopulaIndicator
-from maxcorr.typing import BackendType, SemanticsType
+from maxcorr.typing import BackendType, SemanticsType, AlgorithmType
 
 
 class GradientIndicator(CopulaIndicator):
@@ -107,8 +108,8 @@ class GradientIndicator(CopulaIndicator):
         b_cast = self.training_backend.reshape(self.training_backend.cast(b, dtype=float), shape=(n, db))
         for _ in range(self._epochs_start if self.num_calls == 0 else self._epochs_successive):
             self._train_fn(a_cast, b_cast)
-        # compute the indicator value as the absolute value of the (mean) vector product
-        value = self.training_backend.abs(self._hgr(a=a_cast, b=b_cast))
+        # compute the indicator value as the (mean) vector product
+        value = self._hgr(a=a_cast, b=b_cast)
         # return the result instance cast to the correct type
         if not isinstance(self.backend, self.training_backend.__class__):
             value = self.backend.cast(self.training_backend.item(value), dtype=self.backend.dtype(a))
@@ -163,6 +164,8 @@ class NeuralIndicator(GradientIndicator):
 
     The computation is native in any backend, therefore gradient information is always retrieved when possible.
     """
+
+    algorithm: AlgorithmType = 'nn'
 
     def __init__(self,
                  f_units: Optional[Iterable[int]] = (16, 16, 8),
@@ -259,8 +262,7 @@ class NeuralIndicator(GradientIndicator):
 
     @staticmethod
     def _build_torch(units: Optional[Iterable[int]], dim: int, lr: float, name: str) -> Tuple[Any, Any, int]:
-        from torch.nn import Linear, Sequential, ReLU
-        from torch.optim import Adam
+        import torch
         if units is None:
             assert dim == 1, f"Transformation {name} is required since its input vector is multidimensional"
             network = NeuralIndicator._DummyNetwork()
@@ -269,23 +271,25 @@ class NeuralIndicator(GradientIndicator):
             layers = []
             units = [dim, *units]
             for inp, out in zip(units[:-1], units[1:]):
-                layers += [Linear(inp, out), ReLU()]
-            network = Sequential(*layers, Linear(units[-1], 1))
-            optimizer = Adam(network.parameters(), lr=lr)
+                layers += [torch.nn.Linear(inp, out), torch.nn.ReLU()]
+            network = torch.nn.Sequential(*layers, torch.nn.Linear(units[-1], 1))
+            optimizer = torch.optim.Adam(network.parameters(), lr=lr)
         return network, optimizer, dim
 
     @staticmethod
     def _build_tensorflow(units: Optional[Iterable[int]], dim: int, lr: float, name: str) -> Tuple[Any, Any, int]:
-        from tensorflow.keras import Sequential
+        import tensorflow as tf
         from tensorflow.keras.layers import Dense
-        from tensorflow.keras.optimizers import Adam
         if units is None:
             assert dim == 1, f"Transformation {name} is required since its input vector is multidimensional"
             network = NeuralIndicator._DummyNetwork()
             optimizer = NeuralIndicator._DummyOptimizer()
         else:
-            network = Sequential([Dense(out, activation='relu') for out in units] + [Dense(1)])
-            optimizer = Adam(learning_rate=lr)
+            network = tf.keras.Sequential([Dense(out, activation='relu') for out in units] + [Dense(1)])
+            if platform.system() == 'Darwin' and platform.processor() == 'arm':
+                optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=lr)
+            else:
+                optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
         return network, optimizer, dim
 
 
@@ -296,9 +300,11 @@ class LatticeIndicator(GradientIndicator):
     information is returned if the chosen backend is Torch.
     """
 
+    algorithm: AlgorithmType = 'lat'
+
     def __init__(self,
-                 f_sizes: Union[None, int, Iterable[int]] = 20,
-                 g_sizes: Union[None, int, Iterable[int]] = 20,
+                 f_sizes: Union[None, int, Iterable[int]] = (10,),
+                 g_sizes: Union[None, int, Iterable[int]] = (10,),
                  backend: Union[Backend, BackendType] = 'numpy',
                  semantics: SemanticsType = 'hgr',
                  epochs_start: int = 1000,
@@ -339,6 +345,15 @@ class LatticeIndicator(GradientIndicator):
             raise ModuleNotFoundError("LatticeIndicator needs both tensorflow and tensorflow-lattice installed. "
                                       "Please install it via 'pip install tensorflow tensorflow-lattice'")
 
+        if isinstance(f_sizes, int):
+            f_sizes = (f_sizes,)
+        elif f_sizes is not None:
+            f_sizes = tuple(f_sizes)
+        if isinstance(g_sizes, int):
+            g_sizes = (g_sizes,)
+        elif g_sizes is not None:
+            g_sizes = tuple(g_sizes)
+
         super(LatticeIndicator, self).__init__(
             backend=backend,
             semantics=semantics,
@@ -349,15 +364,6 @@ class LatticeIndicator(GradientIndicator):
             epochs_successive=epochs_successive,
             eps=eps
         )
-
-        if isinstance(f_sizes, int):
-            f_sizes = (f_sizes,)
-        elif f_sizes is not None:
-            f_sizes = tuple(f_sizes)
-        if isinstance(g_sizes, int):
-            g_sizes = (g_sizes,)
-        elif g_sizes is not None:
-            g_sizes = tuple(g_sizes)
 
         self._sizesF: Optional[Tuple[int, ...]] = f_sizes
         self._sizesG: Optional[Tuple[int, ...]] = g_sizes
@@ -386,8 +392,8 @@ class LatticeIndicator(GradientIndicator):
     def _build_model(sizes: Optional[Iterable[int]],
                      lr: float,
                      kwargs: Optional[Dict[str, Any]]) -> Tuple[Any, Any, int]:
-        from tensorflow.keras.optimizers import Adam
-        from tensorflow_lattice.layers import Lattice
+        import tensorflow as tf
+        import tensorflow_lattice as tfl
         if sizes is None:
             dim = 1
             model = LatticeIndicator._DummyNetwork()
@@ -395,6 +401,9 @@ class LatticeIndicator(GradientIndicator):
         else:
             dim = len(list(sizes))
             kwargs = dict() if kwargs is None else kwargs
-            model = Lattice(lattice_sizes=sizes, units=1, **kwargs)
-            optimizer = Adam(learning_rate=lr)
+            model = tfl.layers.Lattice(lattice_sizes=sizes, units=1, **kwargs)
+            if platform.system() == 'Darwin' and platform.processor() == 'arm':
+                optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=lr)
+            else:
+                optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
         return model, optimizer, dim

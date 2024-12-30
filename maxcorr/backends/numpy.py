@@ -1,3 +1,4 @@
+import importlib.util
 from typing import Any, Type, Optional, Union, Iterable
 
 import numpy as np
@@ -21,6 +22,10 @@ class NumpyBackend(Backend):
         return np.ndarray
 
     def cast(self, v, dtype=None) -> Any:
+        if importlib.util.find_spec('torch') is not None:
+            import torch
+            if isinstance(v, torch.Tensor):
+                v = v.detach().cpu().numpy()
         v = self._backend.array(v, dtype=dtype)
         return self.item(v) if v.ndim == 0 else v
 

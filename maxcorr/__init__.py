@@ -6,20 +6,20 @@ from maxcorr.indicators import Indicator, DoubleKernelIndicator, SingleKernelInd
 from maxcorr.typing import BackendType, SemanticsType, AlgorithmType
 
 
-def indicator(backend: Union[Backend, BackendType],
-              semantics: SemanticsType,
-              algorithm: AlgorithmType,
+def indicator(semantics: SemanticsType = 'hgr',
+              algorithm: AlgorithmType = 'dk',
+              backend: Union[Backend, BackendType] = 'numpy',
               **kwargs) -> Indicator:
     """Builds the instance of an indicator for continuous attributes using the given indicator semantics.
-
-    :param backend:
-        The backend to use, or its alias.
 
     :param semantics:
         The type of indicator semantics.
 
     :param algorithm:
         The computational algorithm used for computing the indicator.
+
+    :param backend:
+        The backend to use, or its alias.
 
     :param kwargs:
         Additional algorithm-specific arguments.
@@ -41,46 +41,46 @@ def indicator(backend: Union[Backend, BackendType],
         raise AssertionError(f"Unsupported algorithm '{algorithm}'")
 
 
-def hgr(backend: Union[Backend, BackendType], algorithm: AlgorithmType = 'dk', **kwargs) -> Indicator:
+def hgr(algorithm: AlgorithmType = 'dk', backend: Union[Backend, BackendType] = 'numpy', **kwargs) -> Indicator:
     """Builds a Hirschfield-Gebelin-Rényi (HGR) indicator instance.
 
-    :param backend:
-        The backend to use, or its alias.
-
     :param algorithm:
         The computational algorithm used for computing the indicator.
+
+    :param backend:
+        The backend to use, or its alias.
 
     :param kwargs:
         Additional algorithm-specific arguments.
     """
-    return indicator(backend=backend, algorithm=algorithm, semantics='hgr', **kwargs)
+    return indicator(semantics='hgr', algorithm=algorithm, backend=backend, **kwargs)
 
 
-def gedi(backend: Union[Backend, BackendType], algorithm: AlgorithmType = 'dk', **kwargs) -> Indicator:
+def gedi(algorithm: AlgorithmType = 'dk', backend: Union[Backend, BackendType] = 'numpy', **kwargs) -> Indicator:
     """Builds a Generalized Disparate Impact (GeDI) indicator instance.
 
-    :param backend:
-        The backend to use, or its alias.
-
     :param algorithm:
         The computational algorithm used for computing the indicator.
+
+    :param backend:
+        The backend to use, or its alias.
 
     :param kwargs:
         Additional algorithm-specific arguments.
     """
-    return indicator(backend=backend, algorithm=algorithm, semantics='gedi', **kwargs)
+    return indicator(semantics='gedi', algorithm=algorithm, backend=backend, **kwargs)
 
 
-def nlc(backend: Union[Backend, BackendType], algorithm: AlgorithmType = 'dk', **kwargs) -> Indicator:
+def nlc(algorithm: AlgorithmType = 'dk', backend: Union[Backend, BackendType] = 'numpy', **kwargs) -> Indicator:
     """Builds a Non-Linear Covariance (NLC) indicator instance.
 
-    :param backend:
-        The backend to use, or its alias.
-
     :param algorithm:
         The computational algorithm used for computing the indicator.
+
+    :param backend:
+        The backend to use, or its alias.
 
     :param kwargs:
         Additional algorithm-specific arguments.
     """
-    return indicator(backend=backend, algorithm=algorithm, semantics='nlc', **kwargs)
+    return indicator(semantics='nlc', algorithm=algorithm, backend=backend, **kwargs)

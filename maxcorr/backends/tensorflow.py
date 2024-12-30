@@ -20,6 +20,10 @@ class TensorflowBackend(Backend):
         return self._backend.Tensor
 
     def cast(self, v, dtype=None) -> Any:
+        if importlib.util.find_spec('torch') is not None:
+            import torch
+            if isinstance(v, torch.Tensor):
+                v = v.detach().cpu().numpy()
         # if the vector is already a tf tensor, simply change the dtype to avoid warnings
         return self._backend.cast(v, dtype=dtype) if self.comply(v) else self._backend.constant(v, dtype=dtype)
 

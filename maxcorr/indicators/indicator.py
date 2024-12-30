@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional, Callable, Union, Tuple, Dict
 
 from maxcorr.backends import NumpyBackend, TorchBackend, Backend, TensorflowBackend
-from maxcorr.typing import BackendType, SemanticsType
+from maxcorr.typing import BackendType, SemanticsType, AlgorithmType
 
 
 class Indicator:
@@ -101,6 +101,9 @@ class Indicator:
         self._last_result: Optional[Indicator.Result] = None
         self._num_calls: int = 0
 
+    algorithm: AlgorithmType
+    """The algorithm used to compute the indicator."""
+
     @property
     def backend(self) -> Backend:
         """The backend to use to compute the indicator."""
@@ -178,6 +181,9 @@ class Indicator:
             A tuple <value, kwargs> containing the value of the indicator along with optional additional results.
         """
         pass
+
+    def __repr__(self) -> str:
+        return f"Indicator(semantics='{self.semantics}', algorithm='{self.algorithm}', backend='{self.backend.name}')"
 
 
 class CopulaIndicator(Indicator):

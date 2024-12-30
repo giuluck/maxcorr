@@ -11,7 +11,7 @@ from scipy.stats import rankdata
 
 from maxcorr.backends import Backend
 from maxcorr.indicators.indicator import Indicator
-from maxcorr.typing import BackendType, SemanticsType
+from maxcorr.typing import BackendType, SemanticsType, AlgorithmType
 
 
 class RandomizedIndicator(Indicator):
@@ -20,6 +20,8 @@ class RandomizedIndicator(Indicator):
     The computation relies on numpy, therefore no gradient information is returned for any backend.
     Moreover, this indicator supports univariate input data only.
     """
+
+    algorithm: AlgorithmType = 'rdc'
 
     def __init__(self,
                  functions: Callable[[np.ndarray], np.ndarray] = np.sin,

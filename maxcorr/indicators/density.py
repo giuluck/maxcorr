@@ -12,7 +12,7 @@ import numpy as np
 
 from maxcorr.backends import Backend, TorchBackend
 from maxcorr.indicators.indicator import Indicator
-from maxcorr.typing import BackendType, SemanticsType
+from maxcorr.typing import BackendType, SemanticsType, AlgorithmType
 
 
 class DensityIndicator(Indicator, ABC):
@@ -21,6 +21,8 @@ class DensityIndicator(Indicator, ABC):
     The computation relies on torch, therefore a compatible version must be installed and no gradient information is
     returned if the chosen backend is Tensorflow. Moreover, this indicator supports univariate input data only.
     """
+
+    algorithm: AlgorithmType = 'kde'
 
     def __init__(self,
                  backend: Union[Backend, BackendType] = 'numpy',
