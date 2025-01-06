@@ -1,23 +1,23 @@
-# test using "pytest"
-# build using "hatch build"
-# publish using "hatch publish"
+# test using 'pytest'
+# build using 'hatch build'
+# publish using 'hatch publish'
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ['hatchling']
+build-backend = 'hatchling.build'
 
 [project]
 name = 'maxcorr'
 version = '0.1.0'
 requires-python = '>=3.8'
 dependencies = [
-    'numpy >= 1.24, < 2',
+    'numpy >= 1.24',
     'pandas >= 1.4',
     'scikit-learn >= 1.1',
     'scipy >= 1.10'
 ]
 description = 'MaxCorr: A Package for Maximal Correlation Indicators'
-readme = { file = "README.md", content-type = "text/markdown" }
+readme = { file = 'README.md', content-type = 'text/markdown' }
 authors = [
     { name = 'Luca Giuliani', email = 'luca.giuliani13@unibo.it' },
     { name = 'University of Bologna - DISI' }
@@ -25,7 +25,13 @@ authors = [
 maintainers = [
     { name = 'Luca Giuliani', email = 'luca.giuliani13@unibo.it' }
 ]
-license = { file = "LICENSE" }
+license = 'MIT'
+classifiers = [
+    'Development Status :: 3 - Alpha',
+    'License :: OSI Approved :: MIT License',
+    'Programming Language :: Python',
+    'Operating System :: OS Independent'
+]
 
 [project.optional-dependencies]
 torch = [
@@ -48,4 +54,4 @@ full = [
 packages = ['maxcorr']
 
 [project.urls]
-Repository = "https://github.com/giuluck/maxcorr"
+Repository = 'https://github.com/giuluck/maxcorr'

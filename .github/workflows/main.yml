@@ -27,8 +27,7 @@ jobs:
                 python-version: ${{ matrix.versions[1] }}
             - name: Install Dependencies
               run: |
-                python -m pip install --upgrade pip uv
-                uv pip install --upgrade pytest==8.2.1 --system
+                python -m pip install --upgrade pip pytest uv
                 uv pip install --upgrade ${{ matrix.versions[2] }} --system
             - name: Print Versions
               run: |

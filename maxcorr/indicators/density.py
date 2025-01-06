@@ -118,7 +118,7 @@ class DensityIndicator(Indicator, ABC):
     @staticmethod
     def chi_2(X, Y, density, damping=0):
         """
-        The \chi^2 divergence between the joint distribution on (x,y) and the product of marginals. This is know to be
+        The chi^2 divergence between the joint distribution on (x,y) and the product of marginals. This is know to be
         the square of an upper-bound on the Hirschfeld-Gebelein-Rényi maximum correlation coefficient. We compute it
         here on an empirical and discretized density estimated from the input data.
         :param X: A torch 1-D Tensor
@@ -180,7 +180,7 @@ class DensityIndicator(Indicator, ABC):
     @staticmethod
     def chi_2_cond(X, Y, Z, density):
         """
-        An estimator of the function z -> chi^2(x|z, y|z) where \chi^2 is the \chi^2 divergence between the joint
+        An estimator of the function z -> chi^2(x|z, y|z) where chi^2 is the chi^2 divergence between the joint
         distribution on (x,y) and the product of marginals. This is know to be the square of an upper-bound on the
         Hirschfeld-Gebelein-Rényi maximum correlation coefficient. We compute it here on an empirical and discretized
         density estimated from the input data.

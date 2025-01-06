@@ -6,7 +6,6 @@ the code of the paper: https://github.com/fairml-research/HGR_NN/tree/main.
 It also includes a custom variant of gradient-based indicator using Tensorflow Lattice.
 """
 import importlib.util
-import platform
 from abc import abstractmethod
 from typing import Any, Iterable, Optional, Tuple, Callable, Union, Dict
 
@@ -286,10 +285,7 @@ class NeuralIndicator(GradientIndicator):
             optimizer = NeuralIndicator._DummyOptimizer()
         else:
             network = tf.keras.Sequential([Dense(out, activation='relu') for out in units] + [Dense(1)])
-            if platform.system() == 'Darwin' and platform.processor() == 'arm':
-                optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=lr)
-            else:
-                optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+            optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
         return network, optimizer, dim
 
 
@@ -402,8 +398,5 @@ class LatticeIndicator(GradientIndicator):
             dim = len(list(sizes))
             kwargs = dict() if kwargs is None else kwargs
             model = tfl.layers.Lattice(lattice_sizes=sizes, units=1, **kwargs)
-            if platform.system() == 'Darwin' and platform.processor() == 'arm':
-                optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=lr)
-            else:
-                optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+            optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
         return model, optimizer, dim

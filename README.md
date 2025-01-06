@@ -15,7 +15,7 @@ Specifically, such dependencies can be downloaded passing a parameter between sq
 
 A full installation including all the optional dependencies can be downloaded using:
 ```
-pip install maxcorr[full]
+pip install 'maxcorr[full]'
 ```
 
 ### **Available Semantics**
