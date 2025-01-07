@@ -10,25 +10,18 @@ jobs:
                 # * test on different operative systems
                 # * test minimal versions: python 3.8.0 + lowest full requirements (of direct packages only)
                 # * test latest versions: python 3.x + latest full requirements
-                #     (set version as 3.12.x for mac due to incompatibility between torch and python 3.13)
-                versions: [
-                  ["windows-2022", "3.8.0", "--resolution lowest-direct .[full]"],
-                  ["macos-13", "3.8.0", "--resolution lowest-direct .[full]"],
-                  ["ubuntu-20.04", "3.8.0", "--resolution lowest-direct .[full]"],
-                  ["windows-2022", "3.x", ".[full]"],
-                  ["macos-13", "3.12.x", ".[full]"],
-                  ["ubuntu-20.04", "3.x", ".[full]"]
-                ]
-        runs-on: ${{ matrix.versions[0] }}
+                os: ["windows-2022", "macos-13", "ubuntu-20.04"]
+                versions: [["3.8.0", "--resolution lowest-direct .[full]"], ["3.x", ".[full]"]]
+        runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v4
             - uses: actions/setup-python@v5
               with:
-                python-version: ${{ matrix.versions[1] }}
+                python-version: ${{ matrix.versions[0] }}
             - name: Install Dependencies
               run: |
                 python -m pip install --upgrade pip pytest uv
-                uv pip install --upgrade ${{ matrix.versions[2] }} --system
+                uv pip install --upgrade ${{ matrix.versions[1] }} --system
             - name: Print Versions
               run: |
                 python --version
