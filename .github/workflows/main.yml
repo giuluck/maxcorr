@@ -9,9 +9,10 @@ jobs:
             matrix:
                 # * test on different operative systems
                 # * test minimal versions: python 3.8.0 + lowest full requirements (of direct packages only)
-                # * test latest versions: python 3.x + latest full requirements
+                # * test latest versions: python 3.12.x + latest full requirements
+                #    (as of today, torch is not compatible with python 3.13)
                 os: ["windows-2022", "macos-13", "ubuntu-20.04"]
-                versions: [["3.8.0", "--resolution lowest-direct .[full]"], ["3.x", ".[full]"]]
+                versions: [["3.8.0", "--resolution lowest-direct .[full]"], ["3.12.x", ".[full]"]]
         runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v4
