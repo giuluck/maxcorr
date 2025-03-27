@@ -29,8 +29,13 @@ class TestBackend(unittest.TestCase):
     def cast(self, v: list) -> Any:
         pytest.skip(reason="Abstract Test Class")
 
-    def vectors(self, shape: Union[int, Iterable[int]] = 10, seed: int = 0, positive: bool = False) -> Tuple[list, Any]:
-        vector = np.random.default_rng(seed=seed).normal(size=shape)
+    def vectors(self,
+                shape: Union[int, Iterable[int]] = 10,
+                seed: int = 0,
+                integer: bool = False,
+                positive: bool = False) -> Tuple[list, Any]:
+        rng = np.random.default_rng(seed=seed)
+        vector = rng.integers(0, 10, size=shape) if integer else rng.normal(size=shape)
         vector = np.abs(vector) if positive else vector
         return vector.tolist(), self.cast(vector)
 
@@ -41,6 +46,12 @@ class TestBackend(unittest.TestCase):
         ref, vec = self.vectors()
         self.assertTrue(self.backend.comply(v=vec), msg="Comply method should return True for compliant vector")
         self.assertFalse(self.backend.comply(v=ref), msg="Comply method should return False for non compliant vector")
+
+    def test_floating(self) -> None:
+        _, flt = self.vectors(integer=False)
+        _, itg = self.vectors(integer=True)
+        self.assertTrue(self.backend.floating(v=flt), msg="Floating method should return True for floating vector")
+        self.assertFalse(self.backend.floating(v=itg), msg="Floating method should return False for integer vector")
 
     def test_cast(self) -> None:
         ref, _ = self.vectors()

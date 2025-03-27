@@ -17,6 +17,9 @@ class TorchBackend(Backend):
     def type(self) -> Type:
         return self._backend.Tensor
 
+    def floating(self, v) -> bool:
+        return self._backend.is_floating_point(v)
+
     def cast(self, v, dtype=None) -> Any:
         # torch uses 'torch.float64' as default type for 'float', use 'torch.float32' instead for compatibility
         dtype = self._backend.float32 if dtype is float else dtype

@@ -133,11 +133,15 @@ class KernelBasedIndicator(CopulaIndicator):
         return self._delta_independent
 
     def _f(self, a) -> Any:
+        # cast vector to float if non-floating input type
+        a = a if self.backend.floating(a) else self.backend.cast(a, dtype=float)
         kernel = self.backend.stack([self.backend.center(fi) for fi in self.kernel_a(a)], axis=1)
         alpha = self.backend.cast(self.last_result.alpha, dtype=self.backend.dtype(a))
         return self.backend.matmul(kernel, alpha)
 
     def _g(self, b) -> Any:
+        # cast vector to float if non-floating input type
+        b = b if self.backend.floating(b) else self.backend.cast(b, dtype=float)
         kernel = self.backend.stack([self.backend.center(gi) for gi in self.kernel_b(b)], axis=1)
         beta = self.backend.cast(self.last_result.beta, dtype=self.backend.dtype(b))
         return self.backend.matmul(kernel, beta)

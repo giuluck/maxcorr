@@ -124,7 +124,7 @@ class DensityIndicator(Indicator, ABC):
         :param X: A torch 1-D Tensor
         :param Y: A torch 1-D Tensor
         :param density: so far only kde is supported
-        :return: numerical value between 0 and \infty (0: independent)
+        :return: numerical value between 0 and infinity (0: independent)
         """
         import torch
         h2d = DensityIndicator._joint_2(X, Y, density, damping=damping)

@@ -19,13 +19,19 @@ class TensorflowBackend(Backend):
     def type(self) -> Type:
         return self._backend.Tensor
 
+    def floating(self, v) -> bool:
+        return v.dtype.is_floating
+
     def cast(self, v, dtype=None) -> Any:
+        # detach torch tensor if passed as input
         if importlib.util.find_spec('torch') is not None:
             import torch
             if isinstance(v, torch.Tensor):
                 v = v.detach().cpu().numpy()
+        # build a dictionary to avoid passing dtype=None to tensorflow primitives
+        kwargs = dict() if dtype is None else dict(dtype=dtype)
         # if the vector is already a tf tensor, simply change the dtype to avoid warnings
-        return self._backend.cast(v, dtype=dtype) if self.comply(v) else self._backend.constant(v, dtype=dtype)
+        return self._backend.cast(v, **kwargs) if self.comply(v) else self._backend.constant(v, **kwargs)
 
     def item(self, v) -> float:
         return float(v.numpy().item())

@@ -21,7 +21,11 @@ class NumpyBackend(Backend):
     def type(self) -> Type:
         return np.ndarray
 
+    def floating(self, v) -> bool:
+        return np.issubdtype(v.dtype, np.floating)
+
     def cast(self, v, dtype=None) -> Any:
+        # detach torch tensor if passed as input
         if importlib.util.find_spec('torch') is not None:
             import torch
             if isinstance(v, torch.Tensor):

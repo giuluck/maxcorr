@@ -54,6 +54,18 @@ class Backend:
         return isinstance(v, self.type)
 
     @abstractmethod
+    def floating(self, v) -> bool:
+        """Checks whether a vector has floating point values.
+
+        :param v:
+            The input vector.
+
+        :return:
+            Whether the vector has floating point values.
+        """
+        pass
+
+    @abstractmethod
     def cast(self, v, dtype=None) -> Any:
         """Casts the vector to the backend.
 
